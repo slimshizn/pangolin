@@ -28,7 +28,7 @@
     },
     "dependencies": {
         "@asteasolutions/zod-to-openapi": "^7.3.4",
-        "@hookform/resolvers": "3.9.1",
+        "@hookform/resolvers": "5.2.1",
         "@node-rs/argon2": "^2.0.2",
         "@oslojs/crypto": "1.0.1",
         "@oslojs/encoding": "1.1.0",
