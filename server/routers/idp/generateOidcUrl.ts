@@ -10,10 +10,12 @@ import { idp, idpOidcConfig, idpOrg } from "@server/db";
 import { and, eq } from "drizzle-orm";
 import * as arctic from "arctic";
 import { generateOidcRedirectUrl } from "@server/lib/idp/generateRedirectUrl";
-import cookie from "cookie";
 import jsonwebtoken from "jsonwebtoken";
 import config from "@server/lib/config";
 import { decrypt } from "@server/lib/crypto";
+import { build } from "@server/build";
+import { getOrgTierData } from "@server/routers/private/billing";
+import { TierId } from "@server/lib/private/billing/tiers";
 
 const paramsSchema = z
     .object({
@@ -26,6 +28,10 @@ const bodySchema = z
         redirectUrl: z.string()
     })
     .strict();
+
+const querySchema = z.object({
+    orgId: z.string().optional() // check what actuall calls it
+});
 
 const ensureTrailingSlash = (url: string): string => {
     return url;
@@ -65,6 +71,18 @@ export async function generateOidcUrl(
 
         const { redirectUrl: postAuthRedirectUrl } = parsedBody.data;
 
+        const parsedQuery = querySchema.safeParse(req.query);
+        if (!parsedQuery.success) {
+            return next(
+                createHttpError(
+                    HttpCode.BAD_REQUEST,
+                    fromError(parsedQuery.error).toString()
+                )
+            );
+        }
+
+        const { orgId } = parsedQuery.data;
+
         const [existingIdp] = await db
             .select()
             .from(idp)
@@ -78,6 +96,36 @@ export async function generateOidcUrl(
                     "IdP not found for the organization"
                 )
             );
+        }
+
+        if (orgId) {
+            const [idpOrgLink] = await db
+                .select()
+                .from(idpOrg)
+                .where(and(eq(idpOrg.idpId, idpId), eq(idpOrg.orgId, orgId)))
+                .limit(1);
+
+            if (!idpOrgLink) {
+                return next(
+                    createHttpError(
+                        HttpCode.BAD_REQUEST,
+                        "IdP not found for the organization"
+                    )
+                );
+            }
+
+            if (build === "saas") {
+                const { tier } = await getOrgTierData(orgId);
+                const subscribed = tier === TierId.STANDARD;
+                if (!subscribed) {
+                    return next(
+                        createHttpError(
+                            HttpCode.FORBIDDEN,
+                            "This organization's current plan does not support this feature."
+                        )
+                    );
+                }
+            }
         }
 
         const parsedScopes = existingIdp.idpOidcConfig.scopes
@@ -100,7 +148,12 @@ export async function generateOidcUrl(
             key
         );
 
-        const redirectUrl = generateOidcRedirectUrl(idpId);
+        const redirectUrl = await generateOidcRedirectUrl(idpId, orgId);
+        logger.debug("OIDC client info", {
+            decryptedClientId,
+            decryptedClientSecret,
+            redirectUrl
+        });
         const client = new arctic.OAuth2Client(
             decryptedClientId,
             decryptedClientSecret,
@@ -116,7 +169,6 @@ export async function generateOidcUrl(
             codeVerifier,
             parsedScopes
         );
-        logger.debug("Generated OIDC URL", { url });
 
         const stateJwt = jsonwebtoken.sign(
             {

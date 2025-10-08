@@ -12,6 +12,7 @@ import {
 } from "@app/components/InfoSection";
 import { useTranslations } from "next-intl";
 import { build } from "@server/build";
+import CertificateStatus from "@app/components/private/CertificateStatus";
 import { toUnicode } from 'punycode';
 
 type ResourceInfoBoxType = {};
@@ -21,15 +22,13 @@ export default function ResourceInfoBox({ }: ResourceInfoBoxType) {
 
     const t = useTranslations();
 
-
     const fullUrl = `${resource.ssl ? "https" : "http"}://${toUnicode(resource.fullDomain || "")}`;
-
-
 
     return (
         <Alert>
             <AlertDescription>
-                <InfoSections cols={3}>
+                {/* 4 cols because of the certs */}
+                <InfoSections cols={resource.http && build != "oss" ? 4 : 3}>
                     {resource.http ? (
                         <>
                             <InfoSection>
@@ -117,6 +116,34 @@ export default function ResourceInfoBox({ }: ResourceInfoBoxType) {
                                 </InfoSection>
                             )} */}
                         </>
+                    )}
+                    {/* <InfoSection> */}
+                    {/*     <InfoSectionTitle>{t('visibility')}</InfoSectionTitle> */}
+                    {/*     <InfoSectionContent> */}
+                    {/*         <span> */}
+                    {/*             {resource.enabled ? t('enabled') : t('disabled')} */}
+                    {/*         </span> */}
+                    {/*     </InfoSectionContent> */}
+                    {/* </InfoSection> */}
+                    {/* Certificate Status Column */}
+                    {resource.http && resource.domainId && resource.fullDomain && build != "oss" && (
+                        <InfoSection>
+                            <InfoSectionTitle>
+                                {t("certificateStatus", {
+                                    defaultValue: "Certificate"
+                                })}
+                            </InfoSectionTitle>
+                            <InfoSectionContent>
+                                <CertificateStatus
+                                    orgId={resource.orgId}
+                                    domainId={resource.domainId}
+                                    fullDomain={resource.fullDomain}
+                                    autoFetch={true}
+                                    showLabel={false}
+                                    polling={true}
+                                />
+                            </InfoSectionContent>
+                        </InfoSection>
                     )}
                     <InfoSection>
                         <InfoSectionTitle>{t("visibility")}</InfoSectionTitle>

@@ -9,7 +9,9 @@ import { fromError } from "zod-validation-error";
 import { subdomainSchema } from "@server/lib/schemas";
 import { generateId } from "@server/auth/sessions/app";
 import { eq, and } from "drizzle-orm";
-import { isValidDomain } from "@server/lib/validators";
+import { usageService } from "@server/lib/private/billing/usageService";
+import { FeatureId } from "@server/lib/private/billing";
+import { isSecondLevelDomain, isValidDomain } from "@server/lib/validators";
 import { build } from "@server/build";
 import config from "@server/lib/config";
 
@@ -96,6 +98,45 @@ export async function createOrgDomain(
             return next(
                 createHttpError(HttpCode.BAD_REQUEST, "Invalid domain format")
             );
+        }
+
+        if (isSecondLevelDomain(baseDomain) && type == "cname") {
+            // many providers dont allow cname for this. Lets prevent it for the user for now
+            return next(
+                createHttpError(
+                    HttpCode.BAD_REQUEST, 
+                    "You cannot create a CNAME record on a root domain. RFC 1912 § 2.4 prohibits CNAME records at the zone apex. Please use a subdomain."
+                )
+            );
+        }
+
+        if (build == "saas") {
+            const usage = await usageService.getUsage(orgId, FeatureId.DOMAINS);
+            if (!usage) {
+                return next(
+                    createHttpError(
+                        HttpCode.NOT_FOUND,
+                        "No usage data found for this organization"
+                    )
+                );
+            }
+            const rejectDomains = await usageService.checkLimitSet(
+                orgId,
+                false,
+                FeatureId.DOMAINS,
+                {
+                    ...usage,
+                    instantaneousValue: (usage.instantaneousValue || 0) + 1
+                } // We need to add one to know if we are violating the limit
+            );
+            if (rejectDomains) {
+                return next(
+                    createHttpError(
+                        HttpCode.FORBIDDEN,
+                        "Domain limit exceeded. Please upgrade your plan."
+                    )
+                );
+            }
         }
 
         let numOrgDomains: OrgDomains[] | undefined;
@@ -259,6 +300,14 @@ export async function createOrgDomain(
                 .from(orgDomains)
                 .where(eq(orgDomains.orgId, orgId));
         });
+
+        if (numOrgDomains) {
+            await usageService.updateDaily(
+                orgId,
+                FeatureId.DOMAINS,
+                numOrgDomains.length
+            );
+        }
 
         if (!returned) {
             return next(

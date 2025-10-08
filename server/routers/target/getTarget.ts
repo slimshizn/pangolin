@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { db, Target } from "@server/db";
+import { db, Target, targetHealthCheck, TargetHealthCheck } from "@server/db";
 import { targets } from "@server/db";
 import { eq } from "drizzle-orm";
 import response from "@server/lib/response";
@@ -16,7 +16,9 @@ const getTargetSchema = z
     })
     .strict();
 
-type GetTargetResponse = Target;
+type GetTargetResponse = Target & Omit<TargetHealthCheck, 'hcHeaders'> & {
+    hcHeaders: { name: string; value: string; }[] | null;
+};
 
 registry.registerPath({
     method: "get",
@@ -62,8 +64,29 @@ export async function getTarget(
             );
         }
 
+        const [targetHc] = await db
+            .select()
+            .from(targetHealthCheck)
+            .where(eq(targetHealthCheck.targetId, targetId))
+            .limit(1);
+
+        // Parse hcHeaders from JSON string back to array
+        let parsedHcHeaders = null;
+        if (targetHc?.hcHeaders) {
+            try {
+                parsedHcHeaders = JSON.parse(targetHc.hcHeaders);
+            } catch (error) {
+                // If parsing fails, keep as string for backward compatibility
+                parsedHcHeaders = targetHc.hcHeaders;
+            }
+        }
+
         return response<GetTargetResponse>(res, {
-            data: target[0],
+            data: {
+                ...target[0],
+                ...targetHc,
+                hcHeaders: parsedHcHeaders
+            },
             success: true,
             error: false,
             message: "Target retrieved successfully",

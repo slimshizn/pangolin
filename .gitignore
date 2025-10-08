@@ -26,6 +26,10 @@ next-env.d.ts
 migrations
 tsconfig.tsbuildinfo
 config/config.yml
+config/config.saas.yml
+config/config.oss.yml
+config/config.enterprise.yml
+config/privateConfig.yml
 config/postgres
 config/postgres*
 config/openapi.yaml
@@ -43,4 +47,4 @@ server/db/index.ts
 server/build.ts
 postgres/
 dynamic/
-certificates/ 
+*.mmdb

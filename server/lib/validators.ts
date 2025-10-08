@@ -163,6 +163,26 @@ export function validateHeaders(headers: string): boolean {
     });
 }
 
+export function isSecondLevelDomain(domain: string): boolean {
+    if (!domain || typeof domain !== 'string') {
+        return false;
+    }
+
+    const trimmedDomain = domain.trim().toLowerCase();
+    
+    // Split into parts
+    const parts = trimmedDomain.split('.');
+    
+    // Should have exactly 2 parts for a second-level domain (e.g., "example.com")
+    if (parts.length !== 2) {
+        return false;
+    }
+
+    // Check if the TLD part is valid
+    const tld = parts[1].toUpperCase();
+    return validTlds.includes(tld);
+}
+
 const validTlds = [
     "AAA",
     "AARP",

@@ -11,7 +11,7 @@ export async function sendEmail(
         from: string | undefined;
         to: string | undefined;
         subject: string;
-    },
+    }
 ) {
     if (!emailClient) {
         logger.warn("Email client not configured, skipping email send");
@@ -25,16 +25,16 @@ export async function sendEmail(
 
     const emailHtml = await render(template);
 
-    const appName = "Pangolin";
+    const appName = config.getRawPrivateConfig().branding?.app_name || "Pangolin";
 
     await emailClient.sendMail({
         from: {
             name: opts.name || appName,
-            address: opts.from,
+            address: opts.from
         },
         to: opts.to,
         subject: opts.subject,
-        html: emailHtml,
+        html: emailHtml
     });
 }
 

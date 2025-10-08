@@ -16,7 +16,7 @@ export async function verifyExitNodeOrgAccess(
     return { hasAccess: true, exitNode };
 }
 
-export async function listExitNodes(orgId: string, filterOnline = false) {
+export async function listExitNodes(orgId: string, filterOnline = false, noCloud = false) {
     // TODO: pick which nodes to send and ping better than just all of them that are not remote
     const allExitNodes = await db
         .select({
@@ -57,4 +57,9 @@ export function selectBestExitNode(
 
 export async function checkExitNodeOrg(exitNodeId: number, orgId: string) {
     return false;
+}
+
+export async function resolveExitNodes(hostname: string, publicKey: string) {
+    // OSS version: simple implementation that returns empty array
+    return [];
 }

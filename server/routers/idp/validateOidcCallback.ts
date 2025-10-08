@@ -30,6 +30,8 @@ import {
 } from "@server/auth/sessions/app";
 import { decrypt } from "@server/lib/crypto";
 import { UserType } from "@server/types/UserTypes";
+import { FeatureId } from "@server/lib/private/billing";
+import { usageService } from "@server/lib/private/billing/usageService";
 
 const ensureTrailingSlash = (url: string): string => {
     return url;
@@ -45,6 +47,10 @@ const bodySchema = z.object({
     code: z.string().nonempty(),
     state: z.string().nonempty(),
     storedState: z.string().nonempty()
+});
+
+const querySchema = z.object({
+    loginPageId: z.coerce.number().optional()
 });
 
 export type ValidateOidcUrlCallbackResponse = {
@@ -79,6 +85,18 @@ export async function validateOidcCallback(
             );
         }
 
+        const parsedQuery = querySchema.safeParse(req.query);
+        if (!parsedQuery.success) {
+            return next(
+                createHttpError(
+                    HttpCode.BAD_REQUEST,
+                    fromError(parsedQuery.error).toString()
+                )
+            );
+        }
+
+        const { loginPageId } = parsedQuery.data;
+
         const { storedState, code, state: expectedState } = parsedBody.data;
 
         const [existingIdp] = await db
@@ -107,7 +125,11 @@ export async function validateOidcCallback(
             key
         );
 
-        const redirectUrl = generateOidcRedirectUrl(existingIdp.idp.idpId);
+        const redirectUrl = await generateOidcRedirectUrl(
+            existingIdp.idp.idpId,
+            undefined,
+            loginPageId
+        );
         const client = new arctic.OAuth2Client(
             decryptedClientId,
             decryptedClientSecret,
@@ -380,12 +402,14 @@ export async function validateOidcCallback(
                 }
 
                 // Update roles for existing auto-provisioned orgs where the role has changed
-                const orgsToUpdate = autoProvisionedOrgs.filter((currentOrg) => {
-                    const newOrg = userOrgInfo.find(
-                        (newOrg) => newOrg.orgId === currentOrg.orgId
-                    );
-                    return newOrg && newOrg.roleId !== currentOrg.roleId;
-                });
+                const orgsToUpdate = autoProvisionedOrgs.filter(
+                    (currentOrg) => {
+                        const newOrg = userOrgInfo.find(
+                            (newOrg) => newOrg.orgId === currentOrg.orgId
+                        );
+                        return newOrg && newOrg.roleId !== currentOrg.roleId;
+                    }
+                );
 
                 if (orgsToUpdate.length > 0) {
                     for (const org of orgsToUpdate) {
@@ -440,6 +464,14 @@ export async function validateOidcCallback(
                     });
                 }
             });
+
+            for (const orgCount of orgUserCounts) {
+                await usageService.updateDaily(
+                    orgCount.orgId,
+                    FeatureId.USERS,
+                    orgCount.userCount
+                );
+            }
 
             const token = generateSessionToken();
             const sess = await createSession(token, existingUserId!);

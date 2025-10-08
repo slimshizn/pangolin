@@ -24,7 +24,7 @@ export async function addPeer(
         throw new Error(`Olm with ID ${clientId} not found`);
     }
 
-    sendToClient(olm.olmId, {
+    await sendToClient(olm.olmId, {
         type: "olm/wg/peer/add",
         data: {
             siteId: peer.siteId,
@@ -49,7 +49,7 @@ export async function deletePeer(clientId: number, siteId: number, publicKey: st
         throw new Error(`Olm with ID ${clientId} not found`);
     }
 
-    sendToClient(olm.olmId, {
+    await sendToClient(olm.olmId, {
         type: "olm/wg/peer/remove",
         data: {
             publicKey,
@@ -80,7 +80,7 @@ export async function updatePeer(
         throw new Error(`Olm with ID ${clientId} not found`);
     }
 
-    sendToClient(olm.olmId, {
+    await sendToClient(olm.olmId, {
         type: "olm/wg/peer/update",
         data: {
             siteId: peer.siteId,

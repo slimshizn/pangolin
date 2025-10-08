@@ -112,7 +112,7 @@ export async function createOidcIdp(
             });
         });
 
-        const redirectUrl = generateOidcRedirectUrl(idpId as number);
+        const redirectUrl = await generateOidcRedirectUrl(idpId as number);
 
         return response<CreateIdpResponse>(res, {
             data: {

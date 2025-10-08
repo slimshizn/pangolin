@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -22,13 +22,9 @@ import {
     CardTitle
 } from "@app/components/ui/card";
 import { Alert, AlertDescription } from "@app/components/ui/alert";
-import { LoginResponse } from "@server/routers/auth";
 import { useRouter } from "next/navigation";
-import { AxiosResponse } from "axios";
-import { formatAxiosError } from "@app/lib/api";
 import { LockIcon, FingerprintIcon } from "lucide-react";
 import { createApiClient } from "@app/lib/api";
-import { useEnvContext } from "@app/hooks/useEnvContext";
 import {
     InputOTP,
     InputOTPGroup,
@@ -42,6 +38,17 @@ import { GenerateOidcUrlResponse } from "@server/routers/idp";
 import { Separator } from "./ui/separator";
 import { useTranslations } from "next-intl";
 import { startAuthentication } from "@simplewebauthn/browser";
+import {
+    generateOidcUrlProxy,
+    loginProxy,
+    securityKeyStartProxy,
+    securityKeyVerifyProxy
+} from "@app/actions/server";
+import { redirect as redirectTo } from "next/navigation";
+import { useEnvContext } from "@app/hooks/useEnvContext";
+// @ts-ignore
+import { loadReoScript } from "reodotdev";
+import { build } from "@server/build";
 
 export type LoginFormIDP = {
     idpId: number;
@@ -53,13 +60,18 @@ type LoginFormProps = {
     redirect?: string;
     onLogin?: () => void | Promise<void>;
     idps?: LoginFormIDP[];
+    orgId?: string;
 };
 
-export default function LoginForm({ redirect, onLogin, idps }: LoginFormProps) {
+export default function LoginForm({
+    redirect,
+    onLogin,
+    idps,
+    orgId
+}: LoginFormProps) {
     const router = useRouter();
 
     const { env } = useEnvContext();
-
     const api = createApiClient({ env });
 
     const [error, setError] = useState<string | null>(null);
@@ -70,6 +82,31 @@ export default function LoginForm({ redirect, onLogin, idps }: LoginFormProps) {
     const [showSecurityKeyPrompt, setShowSecurityKeyPrompt] = useState(false);
 
     const t = useTranslations();
+    const currentHost =
+        typeof window !== "undefined" ? window.location.hostname : "";
+    const expectedHost = new URL(env.app.dashboardUrl).host;
+    const isExpectedHost = currentHost === expectedHost;
+
+    const [reo, setReo] = useState<any | undefined>(undefined);
+    useEffect(() => {
+        async function init() {
+            if (env.app.environment !== "prod") {
+                return;
+            }
+            try {
+                const clientID = env.server.reoClientId;
+                const reoClient = await loadReoScript({ clientID });
+                await reoClient.init({ clientID });
+                setReo(reoClient);
+            } catch (e) {
+                console.error("Failed to load Reo script", e);
+            }
+        }
+
+        if (build == "saas") {
+            init();
+        }
+    }, []);
 
     const formSchema = z.object({
         email: z.string().email({ message: t("emailInvalid") }),
@@ -102,39 +139,39 @@ export default function LoginForm({ redirect, onLogin, idps }: LoginFormProps) {
 
         try {
             // Start WebAuthn authentication without email
-            const startRes = await api.post(
-                "/auth/security-key/authenticate/start",
-                {}
-            );
+            const startResponse = await securityKeyStartProxy({});
 
-            if (!startRes) {
-                setError(
-                    t("securityKeyAuthError", {
-                        defaultValue:
-                            "Failed to start security key authentication"
-                    })
-                );
+            if (startResponse.error) {
+                setError(startResponse.message);
                 return;
             }
 
-            const { tempSessionId, ...options } = startRes.data.data;
+            const { tempSessionId, ...options } = startResponse.data!;
 
             // Perform WebAuthn authentication
             try {
-                const credential = await startAuthentication(options);
+                const credential = await startAuthentication({
+                    optionsJSON: {
+                        ...options,
+                        userVerification: options.userVerification as
+                            | "required"
+                            | "preferred"
+                            | "discouraged"
+                    }
+                });
 
                 // Verify authentication
-                const verifyRes = await api.post(
-                    "/auth/security-key/authenticate/verify",
+                const verifyResponse = await securityKeyVerifyProxy(
                     { credential },
-                    {
-                        headers: {
-                            "X-Temp-Session-Id": tempSessionId
-                        }
-                    }
+                    tempSessionId
                 );
 
-                if (verifyRes) {
+                if (verifyResponse.error) {
+                    setError(verifyResponse.message);
+                    return;
+                }
+
+                if (verifyResponse.success) {
                     if (onLogin) {
                         await onLogin();
                     }
@@ -173,26 +210,13 @@ export default function LoginForm({ redirect, onLogin, idps }: LoginFormProps) {
                 }
             }
         } catch (e: any) {
-            if (e.isAxiosError) {
-                setError(
-                    formatAxiosError(
-                        e,
-                        t("securityKeyAuthError", {
-                            defaultValue:
-                                "Failed to authenticate with security key"
-                        })
-                    )
-                );
-            } else {
-                console.error(e);
-                setError(
-                    e.message ||
-                        t("securityKeyAuthError", {
-                            defaultValue:
-                                "Failed to authenticate with security key"
-                        })
-                );
-            }
+            console.error(e);
+            setError(
+                t("securityKeyAuthError", {
+                    defaultValue:
+                        "An unexpected error occurred. Please try again."
+                })
+            );
         } finally {
             setLoading(false);
             setShowSecurityKeyPrompt(false);
@@ -208,30 +232,60 @@ export default function LoginForm({ redirect, onLogin, idps }: LoginFormProps) {
         setShowSecurityKeyPrompt(false);
 
         try {
-            const res = await api.post<AxiosResponse<LoginResponse>>(
-                "/auth/login",
-                {
-                    email,
-                    password,
-                    code
+            const response = await loginProxy({
+                email,
+                password,
+                code
+            });
+
+            try {
+                const identity = {
+                    username: email,
+                    type: "email" // can be one of email, github, linkedin, gmail, userID,
+                };
+                if (reo) {
+                    reo.identify(identity);
                 }
-            );
+            } catch (e) {
+                console.error("Reo identify error:", e);
+            }
 
-            const data = res.data.data;
+            if (response.error) {
+                setError(response.message);
+                return;
+            }
 
-            if (data?.useSecurityKey) {
+            const data = response.data;
+
+            // Handle case where data is null (e.g., already logged in)
+            if (!data) {
+                if (onLogin) {
+                    await onLogin();
+                }
+                return;
+            }
+
+            if (data.useSecurityKey) {
                 await initiateSecurityKeyAuth();
                 return;
             }
 
-            if (data?.codeRequested) {
+            if (data.codeRequested) {
                 setMfaRequested(true);
                 setLoading(false);
                 mfaForm.reset();
                 return;
             }
 
-            if (data?.emailVerificationRequired) {
+            if (data.emailVerificationRequired) {
+                if (!isExpectedHost) {
+                    setError(
+                        t("emailVerificationRequired", {
+                            dashboardUrl: env.app.dashboardUrl
+                        })
+                    );
+                    return;
+                }
                 if (redirect) {
                     router.push(`/auth/verify-email?redirect=${redirect}`);
                 } else {
@@ -240,7 +294,15 @@ export default function LoginForm({ redirect, onLogin, idps }: LoginFormProps) {
                 return;
             }
 
-            if (data?.twoFactorSetupRequired) {
+            if (data.twoFactorSetupRequired) {
+                if (!isExpectedHost) {
+                    setError(
+                        t("twoFactorSetupRequired", {
+                            dashboardUrl: env.app.dashboardUrl
+                        })
+                    );
+                    return;
+                }
                 const setupUrl = `/auth/2fa/setup?email=${encodeURIComponent(email)}${redirect ? `&redirect=${encodeURIComponent(redirect)}` : ""}`;
                 router.push(setupUrl);
                 return;
@@ -250,50 +312,40 @@ export default function LoginForm({ redirect, onLogin, idps }: LoginFormProps) {
                 await onLogin();
             }
         } catch (e: any) {
-            if (e.isAxiosError) {
-                const errorMessage = formatAxiosError(
-                    e,
-                    t("loginError", {
-                        defaultValue: "Failed to log in"
-                    })
-                );
-                setError(errorMessage);
-                return;
-            } else {
-                console.error(e);
-                setError(
-                    e.message ||
-                        t("loginError", {
-                            defaultValue: "Failed to log in"
-                        })
-                );
-                return;
-            }
+            console.error(e);
+            setError(
+                t("loginError", {
+                    defaultValue:
+                        "An unexpected error occurred. Please try again."
+                })
+            );
         } finally {
             setLoading(false);
         }
     }
 
     async function loginWithIdp(idpId: number) {
+        let redirectUrl: string | undefined;
         try {
-            const res = await api.post<AxiosResponse<GenerateOidcUrlResponse>>(
-                `/auth/idp/${idpId}/oidc/generate-url`,
-                {
-                    redirectUrl: redirect || "/"
-                }
+            const data = await generateOidcUrlProxy(
+                idpId,
+                redirect || "/",
+                orgId
             );
-
-            console.log(res);
-
-            if (!res) {
-                setError(t("loginError"));
+            const url = data.data?.redirectUrl;
+            if (data.error) {
+                setError(data.message);
                 return;
             }
-
-            const data = res.data.data;
-            window.location.href = data.redirectUrl;
-        } catch (e) {
-            console.error(formatAxiosError(e));
+            if (url) {
+                redirectUrl = url;
+            }
+        } catch (e: any) {
+            setError(e.message || t("loginError"));
+            console.error(e);
+        }
+        if (redirectUrl) {
+            redirectTo(redirectUrl);
         }
     }
 
@@ -355,7 +407,7 @@ export default function LoginForm({ redirect, onLogin, idps }: LoginFormProps) {
 
                                 <div className="text-center">
                                     <Link
-                                        href={`/auth/reset-password${form.getValues().email ? `?email=${form.getValues().email}` : ""}`}
+                                        href={`${env.app.dashboardUrl}/auth/reset-password${form.getValues().email ? `?email=${form.getValues().email}` : ""}`}
                                         className="text-sm text-muted-foreground"
                                     >
                                         {t("passwordForgot")}
@@ -498,7 +550,8 @@ export default function LoginForm({ redirect, onLogin, idps }: LoginFormProps) {
                                 </div>
 
                                 {idps.map((idp) => {
-                                    const effectiveType = idp.variant || idp.name.toLowerCase();
+                                    const effectiveType =
+                                        idp.variant || idp.name.toLowerCase();
 
                                     return (
                                         <Button

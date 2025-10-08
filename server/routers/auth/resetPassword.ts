@@ -4,7 +4,7 @@ import createHttpError from "http-errors";
 import { z } from "zod";
 import { fromError } from "zod-validation-error";
 import HttpCode from "@server/types/HttpCode";
-import { response } from "@server/lib";
+import { response } from "@server/lib/response";
 import { db } from "@server/db";
 import { passwordResetTokens, users } from "@server/db";
 import { eq } from "drizzle-orm";

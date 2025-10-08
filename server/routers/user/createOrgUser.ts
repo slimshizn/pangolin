@@ -10,6 +10,11 @@ import { db, UserOrg } from "@server/db";
 import { and, eq } from "drizzle-orm";
 import { idp, idpOidcConfig, roles, userOrgs, users } from "@server/db";
 import { generateId } from "@server/auth/sessions/app";
+import { usageService } from "@server/lib/private/billing/usageService";
+import { FeatureId } from "@server/lib/private/billing";
+import { build } from "@server/build";
+import { getOrgTierData } from "@server/routers/private/billing";
+import { TierId } from "@server/lib/private/billing/tiers";
 
 const paramsSchema = z
     .object({
@@ -93,6 +98,35 @@ export async function createOrgUser(
             roleId
         } = parsedBody.data;
 
+        if (build == "saas") {
+            const usage = await usageService.getUsage(orgId, FeatureId.USERS);
+            if (!usage) {
+                return next(
+                    createHttpError(
+                        HttpCode.NOT_FOUND,
+                        "No usage data found for this organization"
+                    )
+                );
+            }
+            const rejectUsers = await usageService.checkLimitSet(
+                orgId,
+                false,
+                FeatureId.USERS,
+                {
+                    ...usage,
+                    instantaneousValue: (usage.instantaneousValue || 0) + 1
+                } // We need to add one to know if we are violating the limit
+            );
+            if (rejectUsers) {
+                return next(
+                    createHttpError(
+                        HttpCode.FORBIDDEN,
+                        "User limit exceeded. Please upgrade your plan."
+                    )
+                );
+            }
+        }
+
         const [role] = await db
             .select()
             .from(roles)
@@ -112,6 +146,19 @@ export async function createOrgUser(
                 )
             );
         } else if (type === "oidc") {
+            if (build === "saas") {
+                const { tier } = await getOrgTierData(orgId);
+                const subscribed = tier === TierId.STANDARD;
+                if (!subscribed) {
+                    return next(
+                        createHttpError(
+                            HttpCode.FORBIDDEN,
+                            "This organization's current plan does not support this feature."
+                        )
+                    );
+                }
+            }
+
             if (!idpId) {
                 return next(
                     createHttpError(
@@ -218,6 +265,14 @@ export async function createOrgUser(
                     .from(userOrgs)
                     .where(eq(userOrgs.orgId, orgId));
             });
+
+            if (orgUsers) {
+                await usageService.updateDaily(
+                    orgId,
+                    FeatureId.USERS,
+                    orgUsers.length
+                );
+            }
         } else {
             return next(
                 createHttpError(HttpCode.BAD_REQUEST, "User type is required")

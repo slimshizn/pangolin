@@ -5,6 +5,22 @@ export const SiteSchema = z.object({
     "docker-socket-enabled": z.boolean().optional().default(true)
 });
 
+export const TargetHealthCheckSchema = z.object({
+    hostname: z.string(),
+    port: z.number().int().min(1).max(65535),
+    enabled: z.boolean().optional().default(true),
+    path: z.string().optional(),
+    scheme: z.string().optional(),
+    mode: z.string().default("http"),
+    interval: z.number().int().default(30),
+    unhealthyInterval: z.number().int().default(30),
+    timeout: z.number().int().default(5),
+    headers: z.array(z.object({ name: z.string(), value: z.string() })).nullable().optional().default(null),
+    followRedirects: z.boolean().default(true),
+    method: z.string().default("GET"),
+    status: z.number().int().optional()
+});
+
 // Schema for individual target within a resource
 export const TargetSchema = z.object({
     site: z.string().optional(),
@@ -14,7 +30,11 @@ export const TargetSchema = z.object({
     enabled: z.boolean().optional().default(true),
     "internal-port": z.number().int().min(1).max(65535).optional(),
     path: z.string().optional(),
-    "path-match": z.enum(["exact", "prefix", "regex"]).optional().nullable()
+    "path-match": z.enum(["exact", "prefix", "regex"]).optional().nullable(),
+    healthcheck: TargetHealthCheckSchema.optional(),
+    rewritePath: z.string().optional(),
+    "rewrite-match": z.enum(["exact", "prefix", "regex", "stripPrefix"]).optional().nullable(),
+    priority: z.number().int().min(1).max(1000).optional().default(100)
 });
 export type TargetData = z.infer<typeof TargetSchema>;
 
@@ -22,6 +42,10 @@ export const AuthSchema = z.object({
     // pincode has to have 6 digits
     pincode: z.number().min(100000).max(999999).optional(),
     password: z.string().min(1).optional(),
+    "basic-auth": z.object({
+        user: z.string().min(1),
+        password: z.string().min(1)
+    }).optional(),
     "sso-enabled": z.boolean().optional().default(false),
     "sso-roles": z
         .array(z.string())
@@ -183,7 +207,7 @@ export const ClientResourceSchema = z.object({
     "proxy-port": z.number().min(1).max(65535),
     "hostname": z.string().min(1).max(255),
     "internal-port": z.number().min(1).max(65535),
-    enabled: z.boolean().optional().default(true)   
+    enabled: z.boolean().optional().default(true)
 });
 
 // Schema for the entire configuration object

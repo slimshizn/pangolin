@@ -2,7 +2,7 @@ import logger from "@server/logger";
 import { db } from "@server/db";
 import { exitNodes } from "@server/db";
 import { eq } from "drizzle-orm";
-import { sendToExitNode } from "../../lib/exitNodeComms";
+import { sendToExitNode } from "@server/lib/exitNodes";
 
 export async function addPeer(
     exitNodeId: number,

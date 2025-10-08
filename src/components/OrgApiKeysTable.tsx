@@ -124,7 +124,9 @@ export default function OrgApiKeysTable({
                                         setSelected(r);
                                     }}
                                 >
-                                    <span>{t("viewSettings")}</span>
+                                    <Link href={`/${orgId}/settings/api-keys/${r.id}`}>
+                                        {t("viewSettings")}
+                                    </Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                     onClick={() => {

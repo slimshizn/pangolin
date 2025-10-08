@@ -21,7 +21,12 @@ import { hashPassword } from "@server/auth/password";
 import { checkValidInvite } from "@server/auth/checkValidInvite";
 import { passwordSchema } from "@server/auth/passwordSchema";
 import { UserType } from "@server/types/UserTypes";
+import { createUserAccountOrg } from "@server/lib/private/createUserAccountOrg";
 import { build } from "@server/build";
+import resend, {
+    AudienceIds,
+    moveEmailToAudience
+} from "@server/lib/private/resend";
 
 export const signupBodySchema = z.object({
     email: z.string().toLowerCase().email(),
@@ -188,6 +193,26 @@ export async function signup(
         //     orgId: null,
         // });
 
+        if (build == "saas") {
+            const { success, error, org } = await createUserAccountOrg(
+                userId,
+                email
+            );
+            if (!success) {
+                if (error) {
+                    return next(
+                        createHttpError(HttpCode.INTERNAL_SERVER_ERROR, error)
+                    );
+                }
+                return next(
+                    createHttpError(
+                        HttpCode.INTERNAL_SERVER_ERROR,
+                        "Failed to create user account and organization"
+                    )
+                );
+            }
+        }
+
         const token = generateSessionToken();
         const sess = await createSession(token, userId);
         const isSecure = req.protocol === "https";
@@ -197,6 +222,10 @@ export async function signup(
             new Date(sess.expiresAt)
         );
         res.appendHeader("Set-Cookie", cookie);
+
+        if (build == "saas") {
+            moveEmailToAudience(email, AudienceIds.General);
+        }
 
         if (config.getRawConfig().flags?.require_email_verification) {
             sendEmailVerificationCode(email, userId);

@@ -29,6 +29,7 @@ import { useTranslations } from "next-intl";
 import { parseDataSize } from "@app/lib/dataSize";
 import { Badge } from "@app/components/ui/badge";
 import { InfoPopup } from "@app/components/ui/info-popup";
+import { build } from "@server/build";
 
 export type SiteRow = {
     id: number;
@@ -42,6 +43,8 @@ export type SiteRow = {
     newtUpdateAvailable?: boolean;
     online: boolean;
     address?: string;
+    exitNodeName?: string;
+    exitNodeEndpoint?: string;
 };
 
 type SitesTableProps = {
@@ -279,6 +282,34 @@ export default function SitesTable({ sites, orgId }: SitesTableProps) {
                     );
                 }
             }
+        },
+        {
+            accessorKey: "exitNode",
+            header: ({ column }) => {
+                return (
+                    <Button
+                        variant="ghost"
+                        onClick={() =>
+                            column.toggleSorting(column.getIsSorted() === "asc")
+                        }
+                    >
+                        {t("exitNode")}
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                );
+            },
+            cell: ({ row }) => {
+                const originalRow = row.original;
+                return (
+                    <div className="flex items-center space-x-2">
+                        <span>{originalRow.exitNodeName}</span>
+                        {build == "saas" && originalRow.exitNodeName && 
+                         ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'].includes(originalRow.exitNodeName.toLowerCase()) && (
+                            <Badge variant="secondary">Cloud</Badge>
+                        )}
+                    </div>
+                );
+            },
         },
         ...(env.flags.enableClients ? [{
             accessorKey: "address",

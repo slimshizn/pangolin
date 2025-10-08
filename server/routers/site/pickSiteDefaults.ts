@@ -74,6 +74,12 @@ export async function pickSiteDefaults(
         const randomExitNode =
             exitNodesList[Math.floor(Math.random() * exitNodesList.length)];
 
+        if (!randomExitNode) {
+            return next(
+                createHttpError(HttpCode.INTERNAL_SERVER_ERROR, "No available exit node")
+            );
+        }
+
         // TODO: this probably can be optimized...
         // list all of the sites on that exit node
         const sitesQuery = await db
@@ -86,6 +92,7 @@ export async function pickSiteDefaults(
         // TODO: we need to lock this subnet for some time so someone else does not take it
         const subnets = sitesQuery
             .map((site) => site.subnet)
+            .filter((subnet) => subnet && /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/.test(subnet))
             .filter((subnet) => subnet !== null);
         // exclude the exit node address by replacing after the / with a site block size
         subnets.push(

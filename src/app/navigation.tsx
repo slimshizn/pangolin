@@ -14,6 +14,7 @@ import {
     User,
     Globe, // Added from 'dev' branch
     MonitorUp, // Added from 'dev' branch
+    Server,
     Zap
 } from "lucide-react";
 
@@ -57,6 +58,15 @@ export const orgNavSections = (
                       }
                   ]
                 : []),
+            ...(build == "saas"
+                ? [
+                      {
+                          title: "sidebarRemoteExitNodes",
+                          href: "/{orgId}/settings/remote-exit-nodes",
+                          icon: <Server className="h-4 w-4" />
+                      }
+                  ]
+                : []),
             {
                 title: "sidebarDomains",
                 href: "/{orgId}/settings/domains",
@@ -82,6 +92,15 @@ export const orgNavSections = (
                 href: "/{orgId}/settings/access/invitations",
                 icon: <TicketCheck className="h-4 w-4" />
             },
+            ...(build == "saas"
+                ? [
+                      {
+                          title: "sidebarIdentityProviders",
+                          href: "/{orgId}/settings/idp",
+                          icon: <Fingerprint className="h-4 w-4" />
+                      }
+                  ]
+                : []),
             {
                 title: "sidebarShareableLinks",
                 href: "/{orgId}/settings/share-links",
@@ -97,6 +116,15 @@ export const orgNavSections = (
                 href: "/{orgId}/settings/api-keys",
                 icon: <KeyRound className="h-4 w-4" />
             },
+            ...(build == "saas"
+                ? [
+                      {
+                          title: "sidebarBilling",
+                          href: "/{orgId}/settings/billing",
+                          icon: <TicketCheck className="h-4 w-4" />
+                      }
+                  ]
+                : []),
             {
                 title: "sidebarSettings",
                 href: "/{orgId}/settings/general",

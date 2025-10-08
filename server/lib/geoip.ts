@@ -1,9 +1,41 @@
+import logger from "@server/logger";
+import { maxmindLookup } from "@server/db/maxmind";
 import axios from "axios";
 import config from "./config";
 import { tokenManager } from "./tokenManager";
-import logger from "@server/logger";
 
 export async function getCountryCodeForIp(
+    ip: string
+): Promise<string | undefined> {
+    try {
+        if (!maxmindLookup) {
+            logger.warn(
+                "MaxMind DB path not configured, cannot perform GeoIP lookup"
+            );
+            return;
+        }
+
+        const result = maxmindLookup.get(ip);
+
+        if (!result || !result.country) {
+            return;
+        }
+
+        const { country } = result;
+
+        logger.debug(
+            `GeoIP lookup successful for IP ${ip}: ${country.iso_code}`
+        );
+
+        return country.iso_code;
+    } catch (error) {
+        logger.error("Error fetching config in verify session:", error);
+    }
+
+    return;
+}
+
+export async function remoteGetCountryCodeForIp(
     ip: string
 ): Promise<string | undefined> {
     try {

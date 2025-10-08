@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import createHttpError from "http-errors";
 import HttpCode from "@server/types/HttpCode";
-import { response } from "@server/lib";
+import { response } from "@server/lib/response";
 import { User } from "@server/db";
 import { sendEmailVerificationCode } from "../../auth/sendEmailVerificationCode";
 import config from "@server/lib/config";

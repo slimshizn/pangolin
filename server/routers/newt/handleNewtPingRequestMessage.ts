@@ -29,7 +29,14 @@ export const handleNewtPingRequestMessage: MessageHandler = async (context) => {
         .where(eq(sites.siteId, newt.siteId))
         .limit(1);
 
-    const exitNodesList = await listExitNodes(site.orgId, true); // filter for only the online ones
+    if (!site || !site.orgId) {
+        logger.warn("Site not found");
+        return;
+    }
+
+    const { noCloud } = message.data;
+
+    const exitNodesList = await listExitNodes(site.orgId, true, noCloud || false); // filter for only the online ones
 
     let lastExitNodeId = null;
     if (newt.siteId) {

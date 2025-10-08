@@ -14,7 +14,7 @@ import {
 import { clients, clientSites, Newt, sites } from "@server/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { updatePeer } from "../olm/peers";
-import { sendToExitNode } from "../../lib/exitNodeComms";
+import { sendToExitNode } from "@server/lib/exitNodes";
 
 const inputSchema = z.object({
     publicKey: z.string(),
@@ -66,7 +66,7 @@ export const handleGetConfigMessage: MessageHandler = async (context) => {
 
     // we need to wait for hole punch success
     if (!existingSite.endpoint) {
-        logger.warn(`Site ${existingSite.siteId} has no endpoint, skipping`);
+        logger.debug(`In newt get config: existing site ${existingSite.siteId} has no endpoint, skipping`);
         return;
     }
 
@@ -74,12 +74,12 @@ export const handleGetConfigMessage: MessageHandler = async (context) => {
         // TODO: somehow we should make sure a recent hole punch has happened if this occurs (hole punch could be from the last restart if done quickly)
     }
 
-    if (existingSite.lastHolePunch && now - existingSite.lastHolePunch > 6) {
-        logger.warn(
-            `Site ${existingSite.siteId} last hole punch is too old, skipping`
-        );
-        return;
-    }
+    // if (existingSite.lastHolePunch && now - existingSite.lastHolePunch > 6) {
+    //     logger.warn(
+    //         `Site ${existingSite.siteId} last hole punch is too old, skipping`
+    //     );
+    //     return;
+    // }
 
     // update the endpoint and the public key
     const [site] = await db
@@ -176,7 +176,7 @@ export const handleGetConfigMessage: MessageHandler = async (context) => {
 
                     if (!endpoint) {
                         logger.warn(
-                            `Site ${site.siteId} has no endpoint, skipping`
+                            `In Newt get config: Peer site ${site.siteId} has no endpoint, skipping`
                         );
                         return null;
                     }

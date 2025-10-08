@@ -17,7 +17,7 @@ export default async function migration() {
             ALTER TABLE "sites" ADD COLUMN "remoteSubnets" text;
             ALTER TABLE "user" ADD COLUMN "termsAcceptedTimestamp" varchar;
             ALTER TABLE "user" ADD COLUMN "termsVersion" varchar;
-            
+
             COMMIT;
         `);
 

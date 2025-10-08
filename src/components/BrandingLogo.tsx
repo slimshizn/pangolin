@@ -27,10 +27,12 @@ export default function BrandingLogo(props: BrandingLogoProps) {
             }
 
             if (lightOrDark === "light") {
-                return "/logo/word_mark_black.png";
+                return (
+                    env.branding.logo?.lightPath || "/logo/word_mark_black.png"
+                );
             }
 
-            return "/logo/word_mark_white.png";
+            return env.branding.logo?.darkPath || "/logo/word_mark_white.png";
         }
 
         const path = getPath();

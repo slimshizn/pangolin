@@ -108,7 +108,8 @@ export default function SignupForm({
     emailParam
 }: SignupFormProps) {
     const router = useRouter();
-    const api = createApiClient(useEnvContext());
+    const { env } = useEnvContext();
+    const api = createApiClient({ env });
     const t = useTranslations();
 
     const [loading, setLoading] = useState(false);
@@ -129,7 +130,10 @@ export default function SignupForm({
     });
 
     const passwordStrength = calculatePasswordStrength(passwordValue);
-    const doPasswordsMatch = passwordValue.length > 0 && confirmPasswordValue.length > 0 && passwordValue === confirmPasswordValue;
+    const doPasswordsMatch =
+        passwordValue.length > 0 &&
+        confirmPasswordValue.length > 0 &&
+        passwordValue === confirmPasswordValue;
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         const { email, password } = values;
@@ -192,7 +196,10 @@ export default function SignupForm({
         <Card className="w-full max-w-md shadow-md">
             <CardHeader className="border-b">
                 <div className="flex flex-row items-center justify-center">
-                    <BrandingLogo height={58} width={175} />
+                    <BrandingLogo
+                        height={env.branding.logo?.authPage?.height || 58}
+                        width={env.branding.logo?.authPage?.width || 175}
+                    />
                 </div>
                 <div className="text-center space-y-1 pt-3">
                     <p className="text-muted-foreground">{getSubtitle()}</p>
@@ -211,8 +218,8 @@ export default function SignupForm({
                                 <FormItem>
                                     <FormLabel>{t("email")}</FormLabel>
                                     <FormControl>
-                                        <Input 
-                                            {...field} 
+                                        <Input
+                                            {...field}
                                             disabled={!!emailParam}
                                         />
                                     </FormControl>
@@ -227,7 +234,8 @@ export default function SignupForm({
                                 <FormItem>
                                     <div className="flex items-center gap-2">
                                         <FormLabel>{t("password")}</FormLabel>
-                                        {passwordStrength.strength === "strong" && (
+                                        {passwordStrength.strength ===
+                                            "strong" && (
                                             <Check className="h-4 w-4 text-green-500" />
                                         )}
                                     </div>
@@ -238,115 +246,193 @@ export default function SignupForm({
                                                 {...field}
                                                 onChange={(e) => {
                                                     field.onChange(e);
-                                                    setPasswordValue(e.target.value);
+                                                    setPasswordValue(
+                                                        e.target.value
+                                                    );
                                                 }}
                                                 className={cn(
-                                                    passwordStrength.strength === "strong" && "border-green-500 focus-visible:ring-green-500",
-                                                    passwordStrength.strength === "medium" && "border-yellow-500 focus-visible:ring-yellow-500",
-                                                    passwordStrength.strength === "weak" && passwordValue.length > 0 && "border-red-500 focus-visible:ring-red-500"
+                                                    passwordStrength.strength ===
+                                                        "strong" &&
+                                                        "border-green-500 focus-visible:ring-green-500",
+                                                    passwordStrength.strength ===
+                                                        "medium" &&
+                                                        "border-yellow-500 focus-visible:ring-yellow-500",
+                                                    passwordStrength.strength ===
+                                                        "weak" &&
+                                                        passwordValue.length >
+                                                            0 &&
+                                                        "border-red-500 focus-visible:ring-red-500"
                                                 )}
                                                 autoComplete="new-password"
                                             />
                                         </div>
                                     </FormControl>
-                                    
+
                                     {passwordValue.length > 0 && (
                                         <div className="space-y-3 mt-2">
                                             {/* Password Strength Meter */}
                                             <div className="space-y-2">
                                                 <div className="flex justify-between items-center">
-                                                    <span className="text-sm font-medium text-foreground">{t("passwordStrength")}</span>
-                                                    <span className={cn(
-                                                        "text-sm font-semibold",
-                                                        passwordStrength.strength === "strong" && "text-green-600 dark:text-green-400",
-                                                        passwordStrength.strength === "medium" && "text-yellow-600 dark:text-yellow-400",
-                                                        passwordStrength.strength === "weak" && "text-red-600 dark:text-red-400"
-                                                    )}>
-                                                        {t(`passwordStrength${passwordStrength.strength.charAt(0).toUpperCase() + passwordStrength.strength.slice(1)}`)}
+                                                    <span className="text-sm font-medium text-foreground">
+                                                        {t("passwordStrength")}
+                                                    </span>
+                                                    <span
+                                                        className={cn(
+                                                            "text-sm font-semibold",
+                                                            passwordStrength.strength ===
+                                                                "strong" &&
+                                                                "text-green-600 dark:text-green-400",
+                                                            passwordStrength.strength ===
+                                                                "medium" &&
+                                                                "text-yellow-600 dark:text-yellow-400",
+                                                            passwordStrength.strength ===
+                                                                "weak" &&
+                                                                "text-red-600 dark:text-red-400"
+                                                        )}
+                                                    >
+                                                        {t(
+                                                            `passwordStrength${passwordStrength.strength.charAt(0).toUpperCase() + passwordStrength.strength.slice(1)}`
+                                                        )}
                                                     </span>
                                                 </div>
-                                                <Progress 
-                                                    value={passwordStrength.percentage} 
+                                                <Progress
+                                                    value={
+                                                        passwordStrength.percentage
+                                                    }
                                                     className="h-2"
                                                 />
                                             </div>
-                                            
+
                                             {/* Requirements Checklist */}
                                             <div className="bg-muted rounded-lg p-3 space-y-2">
-                                                <div className="text-sm font-medium text-foreground mb-2">{t("passwordRequirements")}</div>
+                                                <div className="text-sm font-medium text-foreground mb-2">
+                                                    {t("passwordRequirements")}
+                                                </div>
                                                 <div className="grid grid-cols-1 gap-1.5">
                                                     <div className="flex items-center gap-2">
-                                                        {passwordStrength.requirements.length ? (
+                                                        {passwordStrength
+                                                            .requirements
+                                                            .length ? (
                                                             <Check className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
                                                         ) : (
                                                             <X className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                                         )}
-                                                        <span className={cn(
-                                                            "text-sm",
-                                                            passwordStrength.requirements.length ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
-                                                        )}>
-                                                            {t("passwordRequirementLengthText")}
+                                                        <span
+                                                            className={cn(
+                                                                "text-sm",
+                                                                passwordStrength
+                                                                    .requirements
+                                                                    .length
+                                                                    ? "text-green-600 dark:text-green-400"
+                                                                    : "text-muted-foreground"
+                                                            )}
+                                                        >
+                                                            {t(
+                                                                "passwordRequirementLengthText"
+                                                            )}
                                                         </span>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        {passwordStrength.requirements.uppercase ? (
+                                                        {passwordStrength
+                                                            .requirements
+                                                            .uppercase ? (
                                                             <Check className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
                                                         ) : (
                                                             <X className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                                         )}
-                                                        <span className={cn(
-                                                            "text-sm",
-                                                            passwordStrength.requirements.uppercase ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
-                                                        )}>
-                                                            {t("passwordRequirementUppercaseText")}
+                                                        <span
+                                                            className={cn(
+                                                                "text-sm",
+                                                                passwordStrength
+                                                                    .requirements
+                                                                    .uppercase
+                                                                    ? "text-green-600 dark:text-green-400"
+                                                                    : "text-muted-foreground"
+                                                            )}
+                                                        >
+                                                            {t(
+                                                                "passwordRequirementUppercaseText"
+                                                            )}
                                                         </span>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        {passwordStrength.requirements.lowercase ? (
+                                                        {passwordStrength
+                                                            .requirements
+                                                            .lowercase ? (
                                                             <Check className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
                                                         ) : (
                                                             <X className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                                         )}
-                                                        <span className={cn(
-                                                            "text-sm",
-                                                            passwordStrength.requirements.lowercase ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
-                                                        )}>
-                                                            {t("passwordRequirementLowercaseText")}
+                                                        <span
+                                                            className={cn(
+                                                                "text-sm",
+                                                                passwordStrength
+                                                                    .requirements
+                                                                    .lowercase
+                                                                    ? "text-green-600 dark:text-green-400"
+                                                                    : "text-muted-foreground"
+                                                            )}
+                                                        >
+                                                            {t(
+                                                                "passwordRequirementLowercaseText"
+                                                            )}
                                                         </span>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        {passwordStrength.requirements.number ? (
+                                                        {passwordStrength
+                                                            .requirements
+                                                            .number ? (
                                                             <Check className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
                                                         ) : (
                                                             <X className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                                         )}
-                                                        <span className={cn(
-                                                            "text-sm",
-                                                            passwordStrength.requirements.number ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
-                                                        )}>
-                                                            {t("passwordRequirementNumberText")}
+                                                        <span
+                                                            className={cn(
+                                                                "text-sm",
+                                                                passwordStrength
+                                                                    .requirements
+                                                                    .number
+                                                                    ? "text-green-600 dark:text-green-400"
+                                                                    : "text-muted-foreground"
+                                                            )}
+                                                        >
+                                                            {t(
+                                                                "passwordRequirementNumberText"
+                                                            )}
                                                         </span>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        {passwordStrength.requirements.special ? (
+                                                        {passwordStrength
+                                                            .requirements
+                                                            .special ? (
                                                             <Check className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
                                                         ) : (
                                                             <X className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                                         )}
-                                                        <span className={cn(
-                                                            "text-sm",
-                                                            passwordStrength.requirements.special ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
-                                                        )}>
-                                                            {t("passwordRequirementSpecialText")}
+                                                        <span
+                                                            className={cn(
+                                                                "text-sm",
+                                                                passwordStrength
+                                                                    .requirements
+                                                                    .special
+                                                                    ? "text-green-600 dark:text-green-400"
+                                                                    : "text-muted-foreground"
+                                                            )}
+                                                        >
+                                                            {t(
+                                                                "passwordRequirementSpecialText"
+                                                            )}
                                                         </span>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     )}
-                                    
+
                                     {/* Only show FormMessage when not showing our custom requirements */}
-                                    {passwordValue.length === 0 && <FormMessage />}
+                                    {passwordValue.length === 0 && (
+                                        <FormMessage />
+                                    )}
                                 </FormItem>
                             )}
                         />
@@ -356,7 +442,9 @@ export default function SignupForm({
                             render={({ field }) => (
                                 <FormItem>
                                     <div className="flex items-center gap-2">
-                                        <FormLabel>{t('confirmPassword')}</FormLabel>
+                                        <FormLabel>
+                                            {t("confirmPassword")}
+                                        </FormLabel>
                                         {doPasswordsMatch && (
                                             <Check className="h-4 w-4 text-green-500" />
                                         )}
@@ -368,23 +456,32 @@ export default function SignupForm({
                                                 {...field}
                                                 onChange={(e) => {
                                                     field.onChange(e);
-                                                    setConfirmPasswordValue(e.target.value);
+                                                    setConfirmPasswordValue(
+                                                        e.target.value
+                                                    );
                                                 }}
                                                 className={cn(
-                                                    doPasswordsMatch && "border-green-500 focus-visible:ring-green-500",
-                                                    confirmPasswordValue.length > 0 && !doPasswordsMatch && "border-red-500 focus-visible:ring-red-500"
+                                                    doPasswordsMatch &&
+                                                        "border-green-500 focus-visible:ring-green-500",
+                                                    confirmPasswordValue.length >
+                                                        0 &&
+                                                        !doPasswordsMatch &&
+                                                        "border-red-500 focus-visible:ring-red-500"
                                                 )}
                                                 autoComplete="new-password"
                                             />
                                         </div>
                                     </FormControl>
-                                    {confirmPasswordValue.length > 0 && !doPasswordsMatch && (
-                                        <p className="text-sm text-red-600 mt-1">
-                                            {t("passwordsDoNotMatch")}
-                                        </p>
-                                    )}
+                                    {confirmPasswordValue.length > 0 &&
+                                        !doPasswordsMatch && (
+                                            <p className="text-sm text-red-600 mt-1">
+                                                {t("passwordsDoNotMatch")}
+                                            </p>
+                                        )}
                                     {/* Only show FormMessage when field is empty */}
-                                    {confirmPasswordValue.length === 0 && <FormMessage />}
+                                    {confirmPasswordValue.length === 0 && (
+                                        <FormMessage />
+                                    )}
                                 </FormItem>
                             )}
                         />
@@ -407,28 +504,32 @@ export default function SignupForm({
                                         </FormControl>
                                         <div className="leading-none">
                                             <FormLabel className="text-sm font-normal">
-                                                {t("signUpTerms.IAgreeToThe")}
-                                                <a
-                                                    href="https://digpangolin.com/terms-of-service.html"
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-primary hover:underline"
-                                                >
+                                                <div>
                                                     {t(
-                                                        "signUpTerms.termsOfService"
-                                                    )}
-                                                </a>
-                                                {t("signUpTerms.and")}
-                                                <a
-                                                    href="https://digpangolin.com/privacy-policy.html"
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-primary hover:underline"
-                                                >
-                                                    {t(
-                                                        "signUpTerms.privacyPolicy"
-                                                    )}
-                                                </a>
+                                                        "signUpTerms.IAgreeToThe"
+                                                    )}{" "}
+                                                    <a
+                                                        href="https://digpangolin.com/terms-of-service.html"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-primary hover:underline"
+                                                    >
+                                                        {t(
+                                                            "signUpTerms.termsOfService"
+                                                        )}{" "}
+                                                    </a>
+                                                    {t("signUpTerms.and")}{" "}
+                                                    <a
+                                                        href="https://digpangolin.com/privacy-policy.html"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-primary hover:underline"
+                                                    >
+                                                        {t(
+                                                            "signUpTerms.privacyPolicy"
+                                                        )}
+                                                    </a>
+                                                </div>
                                             </FormLabel>
                                             <FormMessage />
                                         </div>

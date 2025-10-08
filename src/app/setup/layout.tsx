@@ -12,7 +12,7 @@ import { AxiosResponse } from "axios";
 import { authCookieHeader } from "@app/lib/api/cookies";
 
 export const metadata: Metadata = {
-    title: `Setup - Pangolin`,
+    title: `Setup - ${process.env.BRANDING_APP_NAME || "Pangolin"}`,
     description: ""
 };
 

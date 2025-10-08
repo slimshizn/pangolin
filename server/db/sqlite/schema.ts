@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { InferSelectModel } from "drizzle-orm";
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
@@ -17,7 +18,8 @@ export const orgs = sqliteTable("orgs", {
     orgId: text("orgId").primaryKey(),
     name: text("name").notNull(),
     subnet: text("subnet"),
-    createdAt: text("createdAt")
+    createdAt: text("createdAt"),
+    settings: text("settings") // JSON blob of org-specific settings
 });
 
 export const userDomains = sqliteTable("userDomains", {
@@ -72,6 +74,10 @@ export const sites = sqliteTable("sites", {
 
 export const resources = sqliteTable("resources", {
     resourceId: integer("resourceId").primaryKey({ autoIncrement: true }),
+    resourceGuid: text("resourceGuid", { length: 36 })
+        .unique()
+        .notNull()
+        .$defaultFn(() => randomUUID()),
     orgId: text("orgId")
         .references(() => orgs.orgId, {
             onDelete: "cascade"
@@ -108,7 +114,7 @@ export const resources = sqliteTable("resources", {
     skipToIdpId: integer("skipToIdpId").references(() => idp.idpId, {
         onDelete: "cascade"
     }),
-    headers: text("headers"), // comma-separated list of headers to add to the request
+    headers: text("headers") // comma-separated list of headers to add to the request
 });
 
 export const targets = sqliteTable("targets", {
@@ -130,6 +136,30 @@ export const targets = sqliteTable("targets", {
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
     path: text("path"),
     pathMatchType: text("pathMatchType"), // exact, prefix, regex
+    rewritePath: text("rewritePath"), // if set, rewrites the path to this value before sending to the target
+    rewritePathType: text("rewritePathType"), // exact, prefix, regex, stripPrefix
+    priority: integer("priority").notNull().default(100)
+});
+
+export const targetHealthCheck = sqliteTable("targetHealthCheck", {
+    targetHealthCheckId: integer("targetHealthCheckId").primaryKey({ autoIncrement: true }),
+    targetId: integer("targetId")
+        .notNull()
+        .references(() => targets.targetId, { onDelete: "cascade" }),
+    hcEnabled: integer("hcEnabled", { mode: "boolean" }).notNull().default(false),
+    hcPath: text("hcPath"),
+    hcScheme: text("hcScheme"),
+    hcMode: text("hcMode").default("http"),
+    hcHostname: text("hcHostname"),
+    hcPort: integer("hcPort"),
+    hcInterval: integer("hcInterval").default(30), // in seconds
+    hcUnhealthyInterval: integer("hcUnhealthyInterval").default(30), // in seconds
+    hcTimeout: integer("hcTimeout").default(5), // in seconds
+    hcHeaders: text("hcHeaders"),
+    hcFollowRedirects: integer("hcFollowRedirects", { mode: "boolean" }).default(true),
+    hcMethod: text("hcMethod").default("GET"),
+    hcStatus: integer("hcStatus"), // http code
+    hcHealth: text("hcHealth").default("unknown") // "unknown", "healthy", "unhealthy"
 });
 
 export const exitNodes = sqliteTable("exitNodes", {
@@ -450,18 +480,6 @@ export const userResources = sqliteTable("userResources", {
         .references(() => resources.resourceId, { onDelete: "cascade" })
 });
 
-export const limitsTable = sqliteTable("limits", {
-    limitId: integer("limitId").primaryKey({ autoIncrement: true }),
-    orgId: text("orgId")
-        .references(() => orgs.orgId, {
-            onDelete: "cascade"
-        })
-        .notNull(),
-    name: text("name").notNull(),
-    value: integer("value").notNull(),
-    description: text("description")
-});
-
 export const userInvites = sqliteTable("userInvites", {
     inviteId: text("inviteId").primaryKey(),
     orgId: text("orgId")
@@ -494,6 +512,16 @@ export const resourcePassword = sqliteTable("resourcePassword", {
         .notNull()
         .references(() => resources.resourceId, { onDelete: "cascade" }),
     passwordHash: text("passwordHash").notNull()
+});
+
+export const resourceHeaderAuth = sqliteTable("resourceHeaderAuth", {
+    headerAuthId: integer("headerAuthId").primaryKey({
+        autoIncrement: true
+    }),
+    resourceId: integer("resourceId")
+        .notNull()
+        .references(() => resources.resourceId, { onDelete: "cascade" }),
+    headerAuthHash: text("headerAuthHash").notNull()
 });
 
 export const resourceAccessToken = sqliteTable("resourceAccessToken", {
@@ -706,12 +734,12 @@ export type RoleSite = InferSelectModel<typeof roleSites>;
 export type UserSite = InferSelectModel<typeof userSites>;
 export type RoleResource = InferSelectModel<typeof roleResources>;
 export type UserResource = InferSelectModel<typeof userResources>;
-export type Limit = InferSelectModel<typeof limitsTable>;
 export type UserInvite = InferSelectModel<typeof userInvites>;
 export type UserOrg = InferSelectModel<typeof userOrgs>;
 export type ResourceSession = InferSelectModel<typeof resourceSessions>;
 export type ResourcePincode = InferSelectModel<typeof resourcePincode>;
 export type ResourcePassword = InferSelectModel<typeof resourcePassword>;
+export type ResourceHeaderAuth = InferSelectModel<typeof resourceHeaderAuth>;
 export type ResourceOtp = InferSelectModel<typeof resourceOtp>;
 export type ResourceAccessToken = InferSelectModel<typeof resourceAccessToken>;
 export type ResourceWhitelist = InferSelectModel<typeof resourceWhitelist>;
@@ -731,3 +759,4 @@ export type SiteResource = InferSelectModel<typeof siteResources>;
 export type OrgDomains = InferSelectModel<typeof orgDomains>;
 export type SetupToken = InferSelectModel<typeof setupTokens>;
 export type HostMeta = InferSelectModel<typeof hostMeta>;
+export type TargetHealthCheck = InferSelectModel<typeof targetHealthCheck>;

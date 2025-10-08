@@ -58,7 +58,7 @@ import {
 } from "@app/components/ui/popover";
 import { CaretSortIcon, CheckIcon } from "@radix-ui/react-icons";
 import { cn } from "@app/lib/cn";
-import { ArrowRight, MoveRight, SquareArrowOutUpRight } from "lucide-react";
+import { ArrowRight, Info, MoveRight, Plus, SquareArrowOutUpRight } from "lucide-react";
 import CopyTextBox from "@app/components/CopyTextBox";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -92,6 +92,8 @@ import { parseHostTarget } from "@app/lib/parseHostTarget";
 import { toASCII, toUnicode } from 'punycode';
 import { DomainRow } from "../../../../../components/DomainsTable";
 import { finalizeSubdomainSanitize } from "@app/lib/subdomain-utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@app/components/ui/tooltip";
+import { PathMatchDisplay, PathMatchModal, PathRewriteDisplay, PathRewriteModal } from "@app/components/PathMatchRenameModal";
 
 
 const baseResourceFormSchema = z.object({
@@ -116,7 +118,10 @@ const addTargetSchema = z.object({
     port: z.coerce.number().int().positive(),
     siteId: z.number().int().positive(),
     path: z.string().optional().nullable(),
-    pathMatchType: z.enum(["exact", "prefix", "regex"]).optional().nullable()
+    pathMatchType: z.enum(["exact", "prefix", "regex"]).optional().nullable(),
+    rewritePath: z.string().optional().nullable(),
+    rewritePathType: z.enum(["exact", "prefix", "regex", "stripPrefix"]).optional().nullable(),
+    priority: z.number().int().min(1).max(1000)
 }).refine(
     (data) => {
         // If path is provided, pathMatchType must be provided
@@ -149,7 +154,23 @@ const addTargetSchema = z.object({
     {
         message: "Invalid path configuration"
     }
-);
+)
+    .refine(
+        (data) => {
+            // If rewritePath is provided, rewritePathType must be provided
+            if (data.rewritePath && !data.rewritePathType) {
+                return false;
+            }
+            // If rewritePathType is provided, rewritePath must be provided
+            if (data.rewritePathType && !data.rewritePath) {
+                return false;
+            }
+            return true;
+        },
+        {
+            message: "Invalid rewrite path configuration"
+        }
+    );
 
 type BaseResourceFormValues = z.infer<typeof baseResourceFormSchema>;
 type HttpResourceFormValues = z.infer<typeof httpResourceFormSchema>;
@@ -240,8 +261,11 @@ export default function Page() {
             method: baseForm.watch("http") ? "http" : null,
             port: "" as any as number,
             path: null,
-            pathMatchType: null
-        }
+            pathMatchType: null,
+            rewritePath: null,
+            rewritePathType: null,
+            priority: 100,
+        } as z.infer<typeof addTargetSchema>
     });
 
     const watchedIp = addTargetForm.watch("ip");
@@ -313,11 +337,28 @@ export default function Page() {
             ...data,
             path: data.path || null,
             pathMatchType: data.pathMatchType || null,
+            rewritePath: data.rewritePath || null,
+            rewritePathType: data.rewritePathType || null,
             siteType: site?.type || null,
             enabled: true,
             targetId: new Date().getTime(),
             new: true,
-            resourceId: 0 // Will be set when resource is created
+            resourceId: 0, // Will be set when resource is created
+            priority: 100, // Default priority
+            hcEnabled: false,
+            hcPath: null,
+            hcMethod: null,
+            hcInterval: null,
+            hcTimeout: null,
+            hcHeaders: null,
+            hcScheme: null,
+            hcHostname: null,
+            hcPort: null,
+            hcFollowRedirects: null,
+            hcHealth: "unknown",
+            hcStatus: null,
+            hcMode: null,
+            hcUnhealthyInterval: null
         };
 
         setTargets([...targets, newTarget]);
@@ -326,7 +367,10 @@ export default function Page() {
             method: baseForm.watch("http") ? "http" : null,
             port: "" as any as number,
             path: null,
-            pathMatchType: null
+            pathMatchType: null,
+            rewritePath: null,
+            rewritePathType: null,
+            priority: 100,
         });
     }
 
@@ -421,8 +465,23 @@ export default function Page() {
                                 method: target.method,
                                 enabled: target.enabled,
                                 siteId: target.siteId,
+                                hcEnabled: target.hcEnabled,
+                                hcPath: target.hcPath || null,
+                                hcMethod: target.hcMethod || null,
+                                hcInterval: target.hcInterval || null,
+                                hcTimeout: target.hcTimeout || null,
+                                hcHeaders: target.hcHeaders || null,
+                                hcScheme: target.hcScheme || null,
+                                hcHostname: target.hcHostname || null,
+                                hcPort: target.hcPort || null,
+                                hcFollowRedirects:
+                                    target.hcFollowRedirects || null,
+                                hcStatus: target.hcStatus || null,
                                 path: target.path,
-                                pathMatchType: target.pathMatchType
+                                pathMatchType: target.pathMatchType,
+                                rewritePath: target.rewritePath,
+                                rewritePathType: target.rewritePathType,
+                                priority: target.priority
                             };
 
                             await api.put(`/resource/${id}/target`, data);
@@ -546,96 +605,109 @@ export default function Page() {
 
     const columns: ColumnDef<LocalTarget>[] = [
         {
-            accessorKey: "path",
-            header: t("matchPath"),
+            id: "priority",
+            header: () => (
+                <div className="flex items-center gap-2">
+                    Priority
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <Info className="h-4 w-4 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                                <p>Higher priority routes are evaluated first. Priority = 100 means automatic ordering (system decides). Use another number to enforce manual priority.</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                </div>
+            ),
             cell: ({ row }) => {
-                const [showPathInput, setShowPathInput] = useState(
-                    !!(row.original.path || row.original.pathMatchType)
-                );
-
-                if (!showPathInput) {
-                    return (
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                setShowPathInput(true);
-                                // Set default pathMatchType when first showing path input
-                                if (!row.original.pathMatchType) {
-                                    updateTarget(row.original.targetId, {
-                                        ...row.original,
-                                        pathMatchType: "prefix"
-                                    });
-                                }
-                            }}
-                        >
-                            + {t("matchPath")}
-                        </Button>
-                    );
-                }
-
                 return (
-                    <div className="flex gap-2 min-w-[200px] items-center">
-                        <Select
-                            defaultValue={row.original.pathMatchType || "prefix"}
-                            onValueChange={(value) =>
-                                updateTarget(row.original.targetId, {
-                                    ...row.original,
-                                    pathMatchType: value as "exact" | "prefix" | "regex"
-                                })
-                            }
-                        >
-                            <SelectTrigger className="w-25">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="prefix">Prefix</SelectItem>
-                                <SelectItem value="exact">Exact</SelectItem>
-                                <SelectItem value="regex">Regex</SelectItem>
-                            </SelectContent>
-                        </Select>
+                    <div className="flex items-center gap-2">
                         <Input
-                            placeholder={
-                                row.original.pathMatchType === "regex"
-                                    ? "^/api/.*"
-                                    : "/path"
-                            }
-                            defaultValue={row.original.path || ""}
-                            className="flex-1 min-w-[150px]"
+                            type="number"
+                            min="1"
+                            max="1000"
+                            defaultValue={row.original.priority || 100}
+                            className="w-20"
                             onBlur={(e) => {
-                                const value = e.target.value.trim();
-                                if (!value) {
-                                    setShowPathInput(false);
+                                const value = parseInt(e.target.value, 10);
+                                if (value >= 1 && value <= 1000) {
                                     updateTarget(row.original.targetId, {
                                         ...row.original,
-                                        path: null,
-                                        pathMatchType: null
-                                    });
-                                } else {
-                                    updateTarget(row.original.targetId, {
-                                        ...row.original,
-                                        path: value
+                                        priority: value
                                     });
                                 }
                             }}
                         />
+                    </div>
+                );
+            }
+        },
+        {
+            accessorKey: "path",
+            header: t("matchPath"),
+            cell: ({ row }) => {
+                const hasPathMatch = !!(row.original.path || row.original.pathMatchType);
+
+                return hasPathMatch ? (
+                    <div className="flex items-center gap-1">
+                        <PathMatchModal
+                            value={{
+                                path: row.original.path,
+                                pathMatchType: row.original.pathMatchType,
+                            }}
+                            onChange={(config) => updateTarget(row.original.targetId, config)}
+                            trigger={
+                                <Button
+                                    variant="outline"
+                                    className="flex items-center gap-2 p-2 max-w-md w-full text-left cursor-pointer"
+                                >
+                                    <PathMatchDisplay
+                                        value={{
+                                            path: row.original.path,
+                                            pathMatchType: row.original.pathMatchType,
+                                        }}
+                                    />
+                                </Button>
+                            }
+                        />
                         <Button
-                            variant="outline"
-                            onClick={() => {
-                                setShowPathInput(false);
+                            variant="text"
+                            size="sm"
+                            className="px-1"
+                            onClick={(e) => {
+                                e.stopPropagation();
                                 updateTarget(row.original.targetId, {
                                     ...row.original,
                                     path: null,
-                                    pathMatchType: null
+                                    pathMatchType: null,
+                                    rewritePath: null,
+                                    rewritePathType: null
                                 });
                             }}
                         >
                             ×
                         </Button>
 
-                        <MoveRight className="ml-4 h-4 w-4" />
+                        {/* <MoveRight className="ml-1 h-4 w-4" /> */}
                     </div>
+                ) : (
+                    <PathMatchModal
+                        value={{
+                            path: row.original.path,
+                            pathMatchType: row.original.pathMatchType,
+                        }}
+                        onChange={(config) => updateTarget(row.original.targetId, config)}
+                        trigger={
+                            <Button variant="outline">
+                                <Plus className="h-4 w-4 mr-2" />
+                                {t("matchPath")}
+                            </Button>
+                        }
+                    />
                 );
-            }
+            },
         },
         {
             accessorKey: "siteId",
@@ -819,6 +891,71 @@ export default function Page() {
                     }
                 />
             )
+        },
+        {
+            accessorKey: "rewritePath",
+            header: t("rewritePath"),
+            cell: ({ row }) => {
+                const hasRewritePath = !!(row.original.rewritePath || row.original.rewritePathType);
+                const noPathMatch = !row.original.path && !row.original.pathMatchType;
+
+                return hasRewritePath && !noPathMatch ? (
+                    <div className="flex items-center gap-1">
+                        {/* <MoveRight className="mr-2 h-4 w-4" /> */}
+                        <PathRewriteModal
+                            value={{
+                                rewritePath: row.original.rewritePath,
+                                rewritePathType: row.original.rewritePathType,
+                            }}
+                            onChange={(config) => updateTarget(row.original.targetId, config)}
+                            trigger={
+                                <Button
+                                    variant="outline"
+                                    className="flex items-center gap-2 p-2 max-w-md w-full text-left cursor-pointer"
+                                    disabled={noPathMatch}
+                                >
+                                    <PathRewriteDisplay
+                                        value={{
+                                            rewritePath: row.original.rewritePath,
+                                            rewritePathType: row.original.rewritePathType,
+                                        }}
+                                    />
+                                </Button>
+                            }
+                        />
+                        <Button
+                            size="sm"
+                            variant="text"
+                            className="px-1"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                updateTarget(row.original.targetId, {
+                                    ...row.original,
+                                    rewritePath: null,
+                                    rewritePathType: null,
+                                });
+                            }}
+                        >
+                            ×
+                        </Button>
+                    </div>
+                ) : (
+                    <PathRewriteModal
+                        value={{
+                            rewritePath: row.original.rewritePath,
+                            rewritePathType: row.original.rewritePathType,
+                        }}
+                        onChange={(config) => updateTarget(row.original.targetId, config)}
+                        trigger={
+                            <Button variant="outline" disabled={noPathMatch}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                {t("rewritePath")}
+                            </Button>
+                        }
+                        disabled={noPathMatch}
+                    />
+                );
+            },
         },
         {
             accessorKey: "enabled",

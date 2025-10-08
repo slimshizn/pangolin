@@ -1,10 +1,13 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import ValidateOidcToken from "@app/components/ValidateOidcToken";
 import { cache } from "react";
-import { priv } from "@app/lib/api";
+import { formatAxiosError, priv } from "@app/lib/api";
 import { AxiosResponse } from "axios";
 import { GetIdpResponse } from "@server/routers/idp";
 import { getTranslations } from "next-intl/server";
+import { pullEnv } from "@app/lib/pullEnv";
+import { LoadLoginPageResponse } from "@server/routers/private/loginPage";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +36,34 @@ export default async function Page(props: {
         return <div>{t('idpErrorNotFound')}</div>;
     }
 
+    const allHeaders = await headers();
+    const host = allHeaders.get("host");
+    const env = pullEnv();
+    const expectedHost = env.app.dashboardUrl.split("//")[1];
+    let loginPage: LoadLoginPageResponse | undefined;
+    if (host !== expectedHost) {
+        try {
+            const res = await priv.get<AxiosResponse<LoadLoginPageResponse>>(
+                `/login-page?idpId=${foundIdp.idpId}&fullDomain=${host}`
+            );
+
+            if (res && res.status === 200) {
+                loginPage = res.data.data;
+            }
+        } catch (e) {
+            console.error(formatAxiosError(e));
+        }
+
+        if (!loginPage) {
+            redirect(env.app.dashboardUrl);
+        }
+    }
+
     return (
         <>
             <ValidateOidcToken
                 orgId={params.orgId}
+                loginPageId={loginPage?.loginPageId}
                 idpId={params.idpId}
                 code={searchParams.code}
                 expectedState={searchParams.state}

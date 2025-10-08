@@ -9,6 +9,7 @@ import {
     text
 } from "drizzle-orm/pg-core";
 import { InferSelectModel } from "drizzle-orm";
+import { randomUUID } from "crypto";
 
 export const domains = pgTable("domains", {
     domainId: varchar("domainId").primaryKey(),
@@ -24,7 +25,8 @@ export const orgs = pgTable("orgs", {
     orgId: varchar("orgId").primaryKey(),
     name: varchar("name").notNull(),
     subnet: varchar("subnet"),
-    createdAt: text("createdAt")
+    createdAt: text("createdAt"),
+    settings: text("settings") // JSON blob of org-specific settings
 });
 
 export const orgDomains = pgTable("orgDomains", {
@@ -66,6 +68,10 @@ export const sites = pgTable("sites", {
 
 export const resources = pgTable("resources", {
     resourceId: serial("resourceId").primaryKey(),
+    resourceGuid: varchar("resourceGuid", { length: 36 })
+        .unique()
+        .notNull()
+        .$defaultFn(() => randomUUID()),
     orgId: varchar("orgId")
         .references(() => orgs.orgId, {
             onDelete: "cascade"
@@ -96,7 +102,7 @@ export const resources = pgTable("resources", {
     skipToIdpId: integer("skipToIdpId").references(() => idp.idpId, {
         onDelete: "cascade"
     }),
-    headers: text("headers"), // comma-separated list of headers to add to the request
+    headers: text("headers") // comma-separated list of headers to add to the request
 });
 
 export const targets = pgTable("targets", {
@@ -118,6 +124,30 @@ export const targets = pgTable("targets", {
     enabled: boolean("enabled").notNull().default(true),
     path: text("path"),
     pathMatchType: text("pathMatchType"), // exact, prefix, regex
+    rewritePath: text("rewritePath"), // if set, rewrites the path to this value before sending to the target
+    rewritePathType: text("rewritePathType"), // exact, prefix, regex, stripPrefix
+    priority: integer("priority").notNull().default(100)
+});
+
+export const targetHealthCheck = pgTable("targetHealthCheck", {
+    targetHealthCheckId: serial("targetHealthCheckId").primaryKey(),
+    targetId: integer("targetId")
+        .notNull()
+        .references(() => targets.targetId, { onDelete: "cascade" }),
+    hcEnabled: boolean("hcEnabled").notNull().default(false),
+    hcPath: varchar("hcPath"),
+    hcScheme: varchar("hcScheme"),
+    hcMode: varchar("hcMode").default("http"),
+    hcHostname: varchar("hcHostname"),
+    hcPort: integer("hcPort"),
+    hcInterval: integer("hcInterval").default(30), // in seconds
+    hcUnhealthyInterval: integer("hcUnhealthyInterval").default(30), // in seconds
+    hcTimeout: integer("hcTimeout").default(5), // in seconds
+    hcHeaders: varchar("hcHeaders"),
+    hcFollowRedirects: boolean("hcFollowRedirects").default(true),
+    hcMethod: varchar("hcMethod").default("GET"),
+    hcStatus: integer("hcStatus"), // http code
+    hcHealth: text("hcHealth").default("unknown") // "unknown", "healthy", "unhealthy"
 });
 
 export const exitNodes = pgTable("exitNodes", {
@@ -135,7 +165,8 @@ export const exitNodes = pgTable("exitNodes", {
     region: varchar("region")
 });
 
-export const siteResources = pgTable("siteResources", { // this is for the clients
+export const siteResources = pgTable("siteResources", {
+    // this is for the clients
     siteResourceId: serial("siteResourceId").primaryKey(),
     siteId: integer("siteId")
         .notNull()
@@ -149,7 +180,7 @@ export const siteResources = pgTable("siteResources", { // this is for the clien
     proxyPort: integer("proxyPort").notNull(),
     destinationPort: integer("destinationPort").notNull(),
     destinationIp: varchar("destinationIp").notNull(),
-    enabled: boolean("enabled").notNull().default(true),
+    enabled: boolean("enabled").notNull().default(true)
 });
 
 export const users = pgTable("user", {
@@ -348,6 +379,14 @@ export const resourcePassword = pgTable("resourcePassword", {
         .notNull()
         .references(() => resources.resourceId, { onDelete: "cascade" }),
     passwordHash: varchar("passwordHash").notNull()
+});
+
+export const resourceHeaderAuth = pgTable("resourceHeaderAuth", {
+    headerAuthId: serial("headerAuthId").primaryKey(),
+    resourceId: integer("resourceId")
+        .notNull()
+        .references(() => resources.resourceId, { onDelete: "cascade" }),
+    headerAuthHash: varchar("headerAuthHash").notNull()
 });
 
 export const resourceAccessToken = pgTable("resourceAccessToken", {
@@ -659,6 +698,7 @@ export type UserOrg = InferSelectModel<typeof userOrgs>;
 export type ResourceSession = InferSelectModel<typeof resourceSessions>;
 export type ResourcePincode = InferSelectModel<typeof resourcePincode>;
 export type ResourcePassword = InferSelectModel<typeof resourcePassword>;
+export type ResourceHeaderAuth = InferSelectModel<typeof resourceHeaderAuth>;
 export type ResourceOtp = InferSelectModel<typeof resourceOtp>;
 export type ResourceAccessToken = InferSelectModel<typeof resourceAccessToken>;
 export type ResourceWhitelist = InferSelectModel<typeof resourceWhitelist>;
@@ -680,3 +720,4 @@ export type OrgDomains = InferSelectModel<typeof orgDomains>;
 export type SiteResource = InferSelectModel<typeof siteResources>;
 export type SetupToken = InferSelectModel<typeof setupTokens>;
 export type HostMeta = InferSelectModel<typeof hostMeta>;
+export type TargetHealthCheck = InferSelectModel<typeof targetHealthCheck>;

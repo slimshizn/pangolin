@@ -7,6 +7,8 @@ import createHttpError from "http-errors";
 import logger from "@server/logger";
 import { fromError } from "zod-validation-error";
 import { and, eq } from "drizzle-orm";
+import { usageService } from "@server/lib/private/billing/usageService";
+import { FeatureId } from "@server/lib/private/billing";
 
 const paramsSchema = z
     .object({
@@ -87,6 +89,14 @@ export async function deleteAccountDomain(
                 .from(orgDomains)
                 .where(eq(orgDomains.orgId, orgId));
         });
+
+        if (numOrgDomains) {
+            await usageService.updateDaily(
+                orgId,
+                FeatureId.DOMAINS,
+                numOrgDomains.length
+            );
+        }
 
         return response<DeleteAccountDomainResponse>(res, {
             data: { success: true },

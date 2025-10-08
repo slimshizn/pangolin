@@ -17,6 +17,9 @@ import { sendEmail } from "@server/emails";
 import SendInviteLink from "@server/emails/templates/SendInviteLink";
 import { OpenAPITags, registry } from "@server/openApi";
 import { UserType } from "@server/types/UserTypes";
+import { usageService } from "@server/lib/private/billing/usageService";
+import { FeatureId } from "@server/lib/private/billing";
+import { build } from "@server/build";
 
 const regenerateTracker = new NodeCache({ stdTTL: 3600, checkperiod: 600 });
 
@@ -28,10 +31,7 @@ const inviteUserParamsSchema = z
 
 const inviteUserBodySchema = z
     .object({
-        email: z
-            .string()
-            .toLowerCase()
-            .email(),
+        email: z.string().toLowerCase().email(),
         roleId: z.number(),
         validHours: z.number().gt(0).lte(168),
         sendEmail: z.boolean().optional(),
@@ -99,7 +99,6 @@ export async function inviteUser(
             regenerate
         } = parsedBody.data;
 
-
         // Check if the organization exists
         const org = await db
             .select()
@@ -110,6 +109,35 @@ export async function inviteUser(
             return next(
                 createHttpError(HttpCode.NOT_FOUND, "Organization not found")
             );
+        }
+
+        if (build == "saas") {
+            const usage = await usageService.getUsage(orgId, FeatureId.USERS);
+            if (!usage) {
+                return next(
+                    createHttpError(
+                        HttpCode.NOT_FOUND,
+                        "No usage data found for this organization"
+                    )
+                );
+            }
+            const rejectUsers = await usageService.checkLimitSet(
+                orgId,
+                false,
+                FeatureId.USERS,
+                {
+                    ...usage,
+                    instantaneousValue: (usage.instantaneousValue || 0) + 1
+                } // We need to add one to know if we are violating the limit
+            );
+            if (rejectUsers) {
+                return next(
+                    createHttpError(
+                        HttpCode.FORBIDDEN,
+                        "User limit exceeded. Please upgrade your plan."
+                    )
+                );
+            }
         }
 
         // Check if the user already exists in the `users` table

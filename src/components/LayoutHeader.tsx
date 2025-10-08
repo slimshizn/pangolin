@@ -6,6 +6,10 @@ import Link from "next/link";
 import ProfileIcon from "@app/components/ProfileIcon";
 import ThemeSwitcher from "@app/components/ThemeSwitcher";
 import { useTheme } from "next-themes";
+import BrandingLogo from "./BrandingLogo";
+import { useEnvContext } from "@app/hooks/useEnvContext";
+import { Badge } from "./ui/badge";
+import { build } from "@server/build";
 
 interface LayoutHeaderProps {
     showTopBar: boolean;
@@ -14,6 +18,7 @@ interface LayoutHeaderProps {
 export function LayoutHeader({ showTopBar }: LayoutHeaderProps) {
     const { theme } = useTheme();
     const [path, setPath] = useState<string>("");
+    const { env } = useEnvContext();
 
     useEffect(() => {
         function getPath() {
@@ -44,16 +49,18 @@ export function LayoutHeader({ showTopBar }: LayoutHeaderProps) {
                     <div className="h-16 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Link href="/" className="flex items-center">
-                                {path && (
-                                    <Image
-                                        src={path}
-                                        alt="Pangolin"
-                                        width={98}
-                                        height={32}
-                                        className="h-8 w-auto"
-                                    />
-                                )}
+                                <BrandingLogo
+                                    width={
+                                        env.branding.logo?.navbar?.width || 98
+                                    }
+                                    height={
+                                        env.branding.logo?.navbar?.height || 32
+                                    }
+                                />
                             </Link>
+                            {/* {build === "saas" && (
+                                <Badge variant="secondary">Cloud Beta</Badge>
+                            )} */}
                         </div>
 
                         {showTopBar && (

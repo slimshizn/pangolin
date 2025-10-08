@@ -2,13 +2,17 @@ import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { db, resources, sites, UserOrg } from "@server/db";
 import { userOrgs, userResources, users, userSites } from "@server/db";
-import { and, eq, exists } from "drizzle-orm";
+import { and, count, eq, exists } from "drizzle-orm";
 import response from "@server/lib/response";
 import HttpCode from "@server/types/HttpCode";
 import createHttpError from "http-errors";
 import logger from "@server/logger";
 import { fromError } from "zod-validation-error";
 import { OpenAPITags, registry } from "@server/openApi";
+import { usageService } from "@server/lib/private/billing/usageService";
+import { FeatureId } from "@server/lib/private/billing";
+import { build } from "@server/build";
+import { UserType } from "@server/types/UserTypes";
 
 const removeUserSchema = z
     .object({
@@ -115,7 +119,32 @@ export async function removeUserOrg(
                 .select()
                 .from(userOrgs)
                 .where(eq(userOrgs.orgId, orgId));
+
+            if (build === "saas") {
+                const [rootUser] = await trx
+                    .select()
+                    .from(users)
+                    .where(eq(users.userId, userId));
+
+                const [leftInOrgs] = await trx
+                    .select({ count: count() })
+                    .from(userOrgs)
+                    .where(eq(userOrgs.userId, userId));
+
+                // if the user is not an internal user and does not belong to any org, delete the entire user
+                if (rootUser?.type !== UserType.Internal && !leftInOrgs.count) {
+                    await trx.delete(users).where(eq(users.userId, userId));
+                }
+            }
         });
+
+        if (userCount) {
+            await usageService.updateDaily(
+                orgId,
+                FeatureId.USERS,
+                userCount.length
+            );
+        }
 
         return response(res, {
             data: null,

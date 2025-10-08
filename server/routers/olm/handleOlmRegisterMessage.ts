@@ -88,10 +88,10 @@ export const handleOlmRegisterMessage: MessageHandler = async (context) => {
             .where(eq(olms.olmId, olm.olmId));
     }
 
-    if (now - (client.lastHolePunch || 0) > 6) {
-        logger.warn("Client last hole punch is too old, skipping all sites");
-        return;
-    }
+    // if (now - (client.lastHolePunch || 0) > 6) {
+    //     logger.warn("Client last hole punch is too old, skipping all sites");
+    //     return;
+    // }
 
     if (client.pubKey !== publicKey) {
         logger.info(
@@ -145,7 +145,7 @@ export const handleOlmRegisterMessage: MessageHandler = async (context) => {
 
         // Validate endpoint and hole punch status
         if (!site.endpoint) {
-            logger.warn(`Site ${site.siteId} has no endpoint, skipping`);
+            logger.warn(`In olm register: site ${site.siteId} has no endpoint, skipping`);
             continue;
         }
 

@@ -32,6 +32,7 @@ import { createApiClient, formatAxiosError } from "@/lib/api";
 import { useEnvContext } from "@/hooks/useEnvContext";
 import { toast } from "@/hooks/useToast";
 import { ListDomainsResponse } from "@server/routers/domain/listDomains";
+import { CheckDomainAvailabilityResponse } from "@server/routers/domain/privateCheckDomainNamespaceAvailability";
 import { AxiosResponse } from "axios";
 import { cn } from "@/lib/cn";
 import { useTranslations } from "next-intl";
@@ -155,7 +156,10 @@ export default function DomainPicker2({
                             fullDomain: firstOrgDomain.baseDomain,
                             baseDomain: firstOrgDomain.baseDomain
                         });
-                    } else if ((build === "saas" || build === "enterprise") && !hideFreeDomain) {
+                    } else if (
+                        (build === "saas" || build === "enterprise") &&
+                        !hideFreeDomain
+                    ) {
                         // If no organization domains, select the provided domain option
                         const domainOptionText =
                             build === "enterprise"
@@ -198,7 +202,21 @@ export default function DomainPicker2({
                     .toLowerCase()
                     .replace(/\./g, "-")
                     .replace(/[^a-z0-9-]/g, "")
-                    .replace(/-+/g, "-");
+                    .replace(/-+/g, "-") // Replace multiple consecutive dashes with single dash
+                    .replace(/^-|-$/g, ""); // Remove leading/trailing dashes
+
+                if (build != "oss") {
+                    const response = await api.get<
+                        AxiosResponse<CheckDomainAvailabilityResponse>
+                    >(
+                        `/domain/check-namespace-availability?subdomain=${encodeURIComponent(checkSubdomain)}`
+                    );
+
+                    if (response.status === 200) {
+                        const { options } = response.data.data;
+                        setAvailableOptions(options);
+                    }
+                }
             } catch (error) {
                 console.error("Failed to check domain availability:", error);
                 setAvailableOptions([]);
@@ -272,13 +290,16 @@ export default function DomainPicker2({
             toast({
                 variant: "destructive",
                 title: t("domainPickerInvalidSubdomain"),
-                description: t("domainPickerInvalidSubdomainRemoved", { sub }),
+                description: t("domainPickerInvalidSubdomainRemoved", { sub })
             });
             return "";
         }
 
         const ok = validateByDomainType(sanitized, {
-            type: base.type === "provided-search" ? "provided-search" : "organization",
+            type:
+                base.type === "provided-search"
+                    ? "provided-search"
+                    : "organization",
             domainType: base.domainType
         });
 
@@ -286,7 +307,10 @@ export default function DomainPicker2({
             toast({
                 variant: "destructive",
                 title: t("domainPickerInvalidSubdomain"),
-                description: t("domainPickerInvalidSubdomainCannotMakeValid", { sub, domain: base.domain }),
+                description: t("domainPickerInvalidSubdomainCannotMakeValid", {
+                    sub,
+                    domain: base.domain
+                })
             });
             return "";
         }
@@ -294,7 +318,10 @@ export default function DomainPicker2({
         if (sub !== sanitized) {
             toast({
                 title: t("domainPickerSubdomainSanitized"),
-                description: t("domainPickerSubdomainCorrected", { sub, sanitized }),
+                description: t("domainPickerSubdomainCorrected", {
+                    sub,
+                    sanitized
+                })
             });
         }
 
@@ -365,7 +392,8 @@ export default function DomainPicker2({
         onDomainChange?.({
             domainId: option.domainId || "",
             domainNamespaceId: option.domainNamespaceId,
-            type: option.type === "provided-search" ? "provided" : "organization",
+            type:
+                option.type === "provided-search" ? "provided" : "organization",
             subdomain: sub || undefined,
             fullDomain,
             baseDomain: option.domain
@@ -389,12 +417,16 @@ export default function DomainPicker2({
         });
     };
 
-    const isSubdomainValid = selectedBaseDomain && subdomainInput
-        ? validateByDomainType(subdomainInput, {
-            type: selectedBaseDomain.type === "provided-search" ? "provided-search" : "organization",
-            domainType: selectedBaseDomain.domainType
-        })
-        : true;
+    const isSubdomainValid =
+        selectedBaseDomain && subdomainInput
+            ? validateByDomainType(subdomainInput, {
+                  type:
+                      selectedBaseDomain.type === "provided-search"
+                          ? "provided-search"
+                          : "organization",
+                  domainType: selectedBaseDomain.domainType
+              })
+            : true;
 
     const showSubdomainInput =
         selectedBaseDomain &&
@@ -415,7 +447,6 @@ export default function DomainPicker2({
     const hasMoreProvided =
         sortedAvailableOptions.length > providedDomainsShown;
 
-
     return (
         <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -434,16 +465,16 @@ export default function DomainPicker2({
                             showProvidedDomainSearch
                                 ? ""
                                 : showSubdomainInput
-                                    ? ""
-                                    : t("domainPickerNotAvailableForCname")
+                                  ? ""
+                                  : t("domainPickerNotAvailableForCname")
                         }
                         disabled={
                             !showSubdomainInput && !showProvidedDomainSearch
                         }
                         className={cn(
                             !isSubdomainValid &&
-                            subdomainInput &&
-                            "border-red-500 focus:border-red-500"
+                                subdomainInput &&
+                                "border-red-500 focus:border-red-500"
                         )}
                         onChange={(e) => {
                             if (showProvidedDomainSearch) {
@@ -453,11 +484,13 @@ export default function DomainPicker2({
                             }
                         }}
                     />
-                    {showSubdomainInput && subdomainInput && !isValidSubdomainStructure(subdomainInput) && (
-                        <p className="text-sm text-red-500">
-                            {t("domainPickerInvalidSubdomainStructure")}
-                        </p>
-                    )}
+                    {showSubdomainInput &&
+                        subdomainInput &&
+                        !isValidSubdomainStructure(subdomainInput) && (
+                            <p className="text-sm text-red-500">
+                                {t("domainPickerInvalidSubdomainStructure")}
+                            </p>
+                        )}
                     {showSubdomainInput && !subdomainInput && (
                         <p className="text-sm text-muted-foreground">
                             {t("domainPickerEnterSubdomainOrLeaveBlank")}
@@ -483,7 +516,7 @@ export default function DomainPicker2({
                                 {selectedBaseDomain ? (
                                     <div className="flex items-center space-x-2 min-w-0 flex-1">
                                         {selectedBaseDomain.type ===
-                                            "organization" ? null : (
+                                        "organization" ? null : (
                                             <Zap className="h-4 w-4 flex-shrink-0" />
                                         )}
                                         <span className="truncate">
@@ -557,8 +590,12 @@ export default function DomainPicker2({
                                                                     {orgDomain.type.toUpperCase()}{" "}
                                                                     •{" "}
                                                                     {orgDomain.verified
-                                                                        ? t("domainPickerVerified")
-                                                                        : t("domainPickerUnverified")}
+                                                                        ? t(
+                                                                              "domainPickerVerified"
+                                                                          )
+                                                                        : t(
+                                                                              "domainPickerUnverified"
+                                                                          )}
                                                                 </span>
                                                             </div>
                                                             <Check
@@ -576,21 +613,24 @@ export default function DomainPicker2({
                                             </CommandList>
                                         </CommandGroup>
                                         {(build === "saas" ||
-                                            build === "enterprise") && !hideFreeDomain && (
+                                            build === "enterprise") &&
+                                            !hideFreeDomain && (
                                                 <CommandSeparator className="my-2" />
                                             )}
                                     </>
                                 )}
 
-                                {(build === "saas" ||
-                                    build === "enterprise") && !hideFreeDomain && (
+                                {(build === "saas" || build === "enterprise") &&
+                                    !hideFreeDomain && (
                                         <CommandGroup
                                             heading={
                                                 build === "enterprise"
                                                     ? t(
-                                                        "domainPickerProvidedDomains"
-                                                    )
-                                                    : t("domainPickerFreeDomains")
+                                                          "domainPickerProvidedDomains"
+                                                      )
+                                                    : t(
+                                                          "domainPickerFreeDomains"
+                                                      )
                                             }
                                             className="py-2"
                                         >
@@ -602,9 +642,13 @@ export default function DomainPicker2({
                                                             id: "provided-search",
                                                             domain:
                                                                 build ===
-                                                                    "enterprise"
-                                                                    ? t("domainPickerProvidedDomain")
-                                                                    : t("domainPickerFreeProvidedDomain"),
+                                                                "enterprise"
+                                                                    ? t(
+                                                                          "domainPickerProvidedDomain"
+                                                                      )
+                                                                    : t(
+                                                                          "domainPickerFreeProvidedDomain"
+                                                                      ),
                                                             type: "provided-search"
                                                         })
                                                     }
@@ -615,9 +659,14 @@ export default function DomainPicker2({
                                                     </div>
                                                     <div className="flex flex-col flex-1 min-w-0">
                                                         <span className="font-medium truncate">
-                                                            {build === "enterprise"
-                                                                ? t("domainPickerProvidedDomain")
-                                                                : t("domainPickerFreeProvidedDomain")}
+                                                            {build ===
+                                                            "enterprise"
+                                                                ? t(
+                                                                      "domainPickerProvidedDomain"
+                                                                  )
+                                                                : t(
+                                                                      "domainPickerFreeProvidedDomain"
+                                                                  )}
                                                         </span>
                                                         <span className="text-xs text-muted-foreground">
                                                             {t(
@@ -643,6 +692,15 @@ export default function DomainPicker2({
                     </Popover>
                 </div>
             </div>
+
+            {/*showProvidedDomainSearch && build === "saas" && (
+                <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                        {t("domainPickerNotWorkSelfHosted")}
+                    </AlertDescription>
+                </Alert>
+            )*/}
 
             {showProvidedDomainSearch && (
                 <div className="space-y-4">
@@ -693,7 +751,7 @@ export default function DomainPicker2({
                                         htmlFor={option.domainNamespaceId}
                                         data-state={
                                             selectedProvidedDomain?.domainNamespaceId ===
-                                                option.domainNamespaceId
+                                            option.domainNamespaceId
                                                 ? "checked"
                                                 : "unchecked"
                                         }

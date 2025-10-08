@@ -199,14 +199,14 @@ export function serializeResourceSessionCookie(
     const now = new Date().getTime();
     if (!isHttp) {
         if (expiresAt === undefined) {
-            return `${cookieName}_s.${now}=${token}; HttpOnly; SameSite=Lax; Path=/; Secure; Domain=${"." + domain}`;
+            return `${cookieName}_s.${now}=${token}; HttpOnly; SameSite=Lax; Path=/; Secure; Domain=${domain}`;
         }
-        return `${cookieName}_s.${now}=${token}; HttpOnly; SameSite=Lax; Expires=${expiresAt.toUTCString()}; Path=/; Secure; Domain=${"." + domain}`;
+        return `${cookieName}_s.${now}=${token}; HttpOnly; SameSite=Lax; Expires=${expiresAt.toUTCString()}; Path=/; Secure; Domain=${domain}`;
     } else {
         if (expiresAt === undefined) {
-            return `${cookieName}.${now}=${token}; HttpOnly; SameSite=Lax; Path=/; Domain=${"." + domain}`;
+            return `${cookieName}.${now}=${token}; HttpOnly; SameSite=Lax; Path=/; Domain=$domain}`;
         }
-        return `${cookieName}.${now}=${token}; HttpOnly; SameSite=Lax; Expires=${expiresAt.toUTCString()}; Path=/; Domain=${"." + domain}`;
+        return `${cookieName}.${now}=${token}; HttpOnly; SameSite=Lax; Expires=${expiresAt.toUTCString()}; Path=/; Domain=${domain}`;
     }
 }
 
@@ -216,9 +216,9 @@ export function createBlankResourceSessionTokenCookie(
     isHttp: boolean = false
 ): string {
     if (!isHttp) {
-        return `${cookieName}_s=; HttpOnly; SameSite=Lax; Max-Age=0; Path=/; Secure; Domain=${"." + domain}`;
+        return `${cookieName}_s=; HttpOnly; SameSite=Lax; Max-Age=0; Path=/; Secure; Domain=${domain}`;
     } else {
-        return `${cookieName}=; HttpOnly; SameSite=Lax; Max-Age=0; Path=/; Domain=${"." + domain}`;
+        return `${cookieName}=; HttpOnly; SameSite=Lax; Max-Age=0; Path=/; Domain=${domain}`;
     }
 }
 

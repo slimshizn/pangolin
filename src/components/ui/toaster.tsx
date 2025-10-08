@@ -9,9 +9,12 @@ import {
     ToastTitle,
     ToastViewport
 } from "@/components/ui/toast";
+import { useEnvContext } from "@app/hooks/useEnvContext";
 
 export function Toaster() {
     const { toasts } = useToast();
+
+    const { env } = useEnvContext();
 
     return (
         <ToastProvider>

@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import HttpCode from "@server/types/HttpCode";
 import createHttpError from "http-errors";
 import logger from "@server/logger";
-import { response } from "@server/lib";
+import { response } from "@server/lib/response";
 import { db, users } from "@server/db";
 import { eq } from "drizzle-orm";
 

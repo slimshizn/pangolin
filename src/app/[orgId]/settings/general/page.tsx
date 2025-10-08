@@ -1,10 +1,12 @@
 "use client";
 import ConfirmDeleteDialog from "@app/components/ConfirmDeleteDialog";
+import AuthPageSettings, { AuthPageSettingsRef } from "@app/components/private/AuthPageSettings";
+
 import { Button } from "@app/components/ui/button";
 import { useOrgContext } from "@app/hooks/useOrgContext";
 import { userOrgUserContext } from "@app/hooks/useOrgUserContext";
 import { toast } from "@app/hooks/useToast";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
     Form,
     FormControl,
@@ -15,6 +17,7 @@ import {
     FormMessage
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -38,7 +41,7 @@ import { useUserContext } from "@app/hooks/useUserContext";
 import { useTranslations } from "next-intl";
 import { build } from "@server/build";
 
-// Updated schema to include subnet field
+// Schema for general organization settings
 const GeneralFormSchema = z.object({
     name: z.string(),
     subnet: z.string().optional()
@@ -58,6 +61,7 @@ export default function GeneralPage() {
 
     const [loadingDelete, setLoadingDelete] = useState(false);
     const [loadingSave, setLoadingSave] = useState(false);
+    const authPageSettingsRef = useRef<AuthPageSettingsRef>(null);
 
     const form = useForm({
         resolver: zodResolver(GeneralFormSchema),
@@ -121,28 +125,33 @@ export default function GeneralPage() {
 
     async function onSubmit(data: GeneralFormValues) {
         setLoadingSave(true);
-        await api
-            .post(`/org/${org?.org.orgId}`, {
-                name: data.name,
+
+        try {
+            // Update organization
+            await api.post(`/org/${org?.org.orgId}`, {
+                name: data.name
                 // subnet: data.subnet // Include subnet in the API request
-            })
-            .then(() => {
-                toast({
-                    title: t("orgUpdated"),
-                    description: t("orgUpdatedDescription")
-                });
-                router.refresh();
-            })
-            .catch((e) => {
-                toast({
-                    variant: "destructive",
-                    title: t("orgErrorUpdate"),
-                    description: formatAxiosError(e, t("orgErrorUpdateMessage"))
-                });
-            })
-            .finally(() => {
-                setLoadingSave(false);
             });
+
+            // Also save auth page settings if they have unsaved changes
+            if (build === "saas" && authPageSettingsRef.current?.hasUnsavedChanges()) {
+                await authPageSettingsRef.current.saveAuthSettings();
+            }
+
+            toast({
+                title: t("orgUpdated"),
+                description: t("orgUpdatedDescription")
+            });
+            router.refresh();
+        } catch (e) {
+            toast({
+                variant: "destructive",
+                title: t("orgErrorUpdate"),
+                description: formatAxiosError(e, t("orgErrorUpdateMessage"))
+            });
+        } finally {
+            setLoadingSave(false);
+        }
     }
 
     return (
@@ -207,7 +216,9 @@ export default function GeneralPage() {
                                         name="subnet"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Subnet</FormLabel>
+                                                <FormLabel>
+                                                    {t("subnet")}
+                                                </FormLabel>
                                                 <FormControl>
                                                     <Input
                                                         {...field}
@@ -216,9 +227,7 @@ export default function GeneralPage() {
                                                 </FormControl>
                                                 <FormMessage />
                                                 <FormDescription>
-                                                    The subnet for this
-                                                    organization's network
-                                                    configuration.
+                                                    {t("subnetDescription")}
                                                 </FormDescription>
                                             </FormItem>
                                         )}
@@ -228,18 +237,23 @@ export default function GeneralPage() {
                         </Form>
                     </SettingsSectionForm>
                 </SettingsSectionBody>
-                <SettingsSectionFooter>
-                    <Button
-                        type="submit"
-                        form="org-settings-form"
-                        loading={loadingSave}
-                        disabled={loadingSave}
-                    >
-                        {t("saveGeneralSettings")}
-                    </Button>
-                </SettingsSectionFooter>
             </SettingsSection>
-            {build === "oss" && (
+
+            {build === "saas" && <AuthPageSettings ref={authPageSettingsRef} />}
+
+            {/* Save Button */}
+            <div className="flex justify-end">
+                <Button
+                    type="submit"
+                    form="org-settings-form"
+                    loading={loadingSave}
+                    disabled={loadingSave}
+                >
+                    {t("saveGeneralSettings")}
+                </Button>
+            </div>
+
+            {build !== "saas" && (
                 <SettingsSection>
                     <SettingsSectionHeader>
                         <SettingsSectionTitle>
@@ -262,6 +276,7 @@ export default function GeneralPage() {
                     </SettingsSectionFooter>
                 </SettingsSection>
             )}
+
         </SettingsContainer>
     );
 }

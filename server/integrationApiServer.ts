@@ -13,6 +13,10 @@ import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
 import { OpenApiGeneratorV3 } from "@asteasolutions/zod-to-openapi";
 import { registry } from "./openApi";
+import fs from "fs";
+import path from "path";
+import { APP_PATH } from "./lib/consts";
+import yaml from "js-yaml";
 
 const dev = process.env.ENVIRONMENT !== "prod";
 const externalPort = config.getRawConfig().server.integration_port;
@@ -92,7 +96,7 @@ function getOpenApiDocumentation() {
 
     const generator = new OpenApiGeneratorV3(registry.definitions);
 
-    return generator.generateDocument({
+    const generated = generator.generateDocument({
         openapi: "3.0.0",
         info: {
             version: "v1",
@@ -100,4 +104,12 @@ function getOpenApiDocumentation() {
         },
         servers: [{ url: "/v1" }]
     });
+
+    // convert to yaml and save to file
+    const outputPath = path.join(APP_PATH, "openapi.yaml");
+    const yamlOutput = yaml.dump(generated);
+    fs.writeFileSync(outputPath, yamlOutput, "utf8");
+    logger.info(`OpenAPI documentation saved to ${outputPath}`);
+
+    return generated;
 }

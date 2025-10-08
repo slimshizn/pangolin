@@ -47,6 +47,8 @@ import { ListIdpsResponse } from "@server/routers/idp";
 import { useTranslations } from "next-intl";
 import { build } from "@server/build";
 import Image from "next/image";
+import { usePrivateSubscriptionStatusContext } from "@app/hooks/privateUseSubscriptionStatusContext";
+import { TierId } from "@server/lib/private/billing/tiers";
 
 type UserType = "internal" | "oidc";
 
@@ -73,6 +75,9 @@ export default function Page() {
     const { env } = useEnvContext();
     const api = createApiClient({ env });
     const t = useTranslations();
+
+    const subscription = usePrivateSubscriptionStatusContext();
+    const subscribed = subscription?.getTier() === TierId.STANDARD;
 
     const [selectedOption, setSelectedOption] = useState<string | null>("internal");
     const [inviteLink, setInviteLink] = useState<string | null>(null);
@@ -227,8 +232,14 @@ export default function Page() {
         }
 
         async function fetchIdps() {
+            if (build === "saas" && !subscribed) {
+                return;
+            }
+
             const res = await api
-                .get<AxiosResponse<ListIdpsResponse>>("/idp")
+                .get<
+                    AxiosResponse<ListIdpsResponse>
+                >(build === "saas" ? `/org/${orgId}/idp` : "/idp")
                 .catch((e) => {
                     console.error(e);
                     toast({
@@ -430,7 +441,7 @@ export default function Page() {
 
             <div>
                 <SettingsContainer>
-                    {!inviteLink && build !== "saas" && dataLoaded ? (
+                    {!inviteLink ? (
                         <SettingsSection>
                             <SettingsSectionHeader>
                                 <SettingsSectionTitle>

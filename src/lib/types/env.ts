@@ -1,6 +1,7 @@
 export type Env = {
     app: {
         environment: string;
+        sandbox_mode: boolean;
         version: string;
         dashboardUrl: string;
     };
@@ -12,6 +13,8 @@ export type Env = {
         resourceSessionRequestParam: string;
         resourceAccessTokenHeadersId: string;
         resourceAccessTokenHeadersToken: string;
+        reoClientId?: string;
+        maxmind_db_path?: string;
     };
     email: {
         emailEnabled: boolean;
@@ -25,5 +28,36 @@ export type Env = {
         disableBasicWireguardSites: boolean;
         enableClients: boolean;
         hideSupporterKey: boolean;
-    }
+    },
+    branding: {
+        appName?: string;
+        background_image_path?: string;
+        logo?: {
+            lightPath?: string;
+            darkPath?: string;
+            authPage?: {
+                width?: number;
+                height?: number;
+            };
+            navbar?: {
+                width?: number;
+                height?: number;
+            }
+        },
+        loginPage?: {
+            titleText?: string;
+            subtitleText?: string;
+        },
+        signupPage?: {
+            titleText?: string;
+            subtitleText?: string;
+        },
+        resourceAuthPage?: {
+            showLogo?: boolean;
+            hidePoweredBy?: boolean;
+            titleText?: string;
+            subtitleText?: string;
+        },
+        footer?: string;
+    };
 };

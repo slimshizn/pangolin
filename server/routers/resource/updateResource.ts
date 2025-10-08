@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { db } from "@server/db";
+import { db, loginPage } from "@server/db";
 import {
     domains,
     Org,
@@ -20,8 +20,10 @@ import { tlsNameSchema } from "@server/lib/schemas";
 import { subdomainSchema } from "@server/lib/schemas";
 import { registry } from "@server/openApi";
 import { OpenAPITags } from "@server/openApi";
+import { createCertificate } from "../private/certificates/createCertificate";
 import { validateAndConstructDomain } from "@server/lib/domainUtils";
 import { validateHeaders } from "@server/lib/validators";
+import { build } from "@server/build";
 
 const updateResourceParamsSchema = z
     .object({
@@ -47,7 +49,10 @@ const updateHttpResourceBodySchema = z
         tlsServerName: z.string().nullable().optional(),
         setHostHeader: z.string().nullable().optional(),
         skipToIdpId: z.number().int().positive().nullable().optional(),
-        headers: z.array(z.object({ name: z.string(), value: z.string() })).nullable().optional(),
+        headers: z
+            .array(z.object({ name: z.string(), value: z.string() }))
+            .nullable()
+            .optional()
     })
     .strict()
     .refine((data) => Object.keys(data).length > 0, {
@@ -234,14 +239,15 @@ async function updateHttpResource(
         const domainId = updateData.domainId;
 
         // Validate domain and construct full domain
-        const domainResult = await validateAndConstructDomain(domainId, resource.orgId, updateData.subdomain);
-        
+        const domainResult = await validateAndConstructDomain(
+            domainId,
+            resource.orgId,
+            updateData.subdomain
+        );
+
         if (!domainResult.success) {
             return next(
-                createHttpError(
-                    HttpCode.BAD_REQUEST,
-                    domainResult.error
-                )
+                createHttpError(HttpCode.BAD_REQUEST, domainResult.error)
             );
         }
 
@@ -266,6 +272,22 @@ async function updateHttpResource(
                     )
                 );
             }
+
+            if (build != "oss") {
+                const existingLoginPages = await db
+                    .select()
+                    .from(loginPage)
+                    .where(eq(loginPage.fullDomain, fullDomain));
+
+                if (existingLoginPages.length > 0) {
+                    return next(
+                        createHttpError(
+                            HttpCode.CONFLICT,
+                            "Login page with that domain already exists"
+                        )
+                    );
+                }
+            }
         }
 
         // update the full domain if it has changed
@@ -278,6 +300,10 @@ async function updateHttpResource(
 
         // Update the subdomain in the update data
         updateData.subdomain = finalSubdomain;
+
+        if (build != "oss") {
+            await createCertificate(domainId, fullDomain, db);
+        }
     }
 
     let headers = null;

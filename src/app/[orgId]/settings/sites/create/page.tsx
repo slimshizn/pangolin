@@ -42,10 +42,7 @@ import {
     FaFreebsd,
     FaWindows
 } from "react-icons/fa";
-import { 
-    SiNixos,
-    SiKubernetes
-} from "react-icons/si";
+import { SiNixos, SiKubernetes } from "react-icons/si";
 import { Checkbox, CheckboxWithLabel } from "@app/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@app/components/ui/alert";
 import { generateKeypair } from "../[niceId]/wireguardConfig";
@@ -56,6 +53,7 @@ import {
     CreateSiteResponse,
     PickSiteDefaultsResponse
 } from "@server/routers/site";
+import { ListRemoteExitNodesResponse } from "@server/routers/private/remoteExitNode";
 import { toast } from "@app/hooks/useToast";
 import { AxiosResponse } from "axios";
 import { useParams, useRouter } from "next/navigation";
@@ -68,6 +66,13 @@ type SiteType = "newt" | "wireguard" | "local";
 
 interface TunnelTypeOption {
     id: SiteType;
+    title: string;
+    description: string;
+    disabled?: boolean;
+}
+
+interface RemoteExitNodeOption {
+    id: string;
     title: string;
     description: string;
     disabled?: boolean;
@@ -115,7 +120,8 @@ export default function Page() {
             method: z.enum(["newt", "wireguard", "local"]),
             copied: z.boolean(),
             clientAddress: z.string().optional(),
-            acceptClients: z.boolean()
+            acceptClients: z.boolean(),
+            exitNodeId: z.number().optional()
         })
         .refine(
             (data) => {
@@ -123,11 +129,24 @@ export default function Page() {
                     // return data.copied;
                     return true;
                 }
-                return true;
+                // For local sites, require exitNodeId
+                return build == "saas" ? data.exitNodeId !== undefined : true;
             },
             {
                 message: t("sitesConfirmCopy"),
                 path: ["copied"]
+            }
+        )
+        .refine(
+            (data) => {
+                if (data.method === "local" && build == "saas") {
+                    return data.exitNodeId !== undefined;
+                }
+                return true;
+            },
+            {
+                message: t("remoteExitNodeRequired"),
+                path: ["exitNodeId"]
             }
         );
 
@@ -148,7 +167,10 @@ export default function Page() {
                   {
                       id: "wireguard" as SiteType,
                       title: t("siteWg"),
-                      description: build == "saas" ? t("siteWgDescriptionSaas") : t("siteWgDescription"),
+                      description:
+                          build == "saas"
+                              ? t("siteWgDescriptionSaas")
+                              : t("siteWgDescription"),
                       disabled: true
                   }
               ]),
@@ -158,7 +180,10 @@ export default function Page() {
                   {
                       id: "local" as SiteType,
                       title: t("local"),
-                      description: build == "saas" ? t("siteLocalDescriptionSaas") : t("siteLocalDescription")
+                      description:
+                          build == "saas"
+                              ? t("siteLocalDescriptionSaas")
+                              : t("siteLocalDescription")
                   }
               ])
     ]);
@@ -183,6 +208,13 @@ export default function Page() {
 
     const [siteDefaults, setSiteDefaults] =
         useState<PickSiteDefaultsResponse | null>(null);
+
+    const [remoteExitNodeOptions, setRemoteExitNodeOptions] = useState<
+        ReadonlyArray<RemoteExitNodeOption>
+    >([]);
+    const [selectedExitNodeId, setSelectedExitNodeId] = useState<
+        string | undefined
+    >();
 
     const hydrateWireGuardConfig = (
         privateKey: string,
@@ -320,7 +352,7 @@ WantedBy=default.target`
             nixos: {
                 All: [
                     `nix run 'nixpkgs#fosrl-newt' -- --id ${id} --secret ${secret} --endpoint ${endpoint}${acceptClientsFlag}`
-                ],
+                ]
                 // aarch64: [
                 //     `nix run 'nixpkgs#fosrl-newt' -- --id ${id} --secret ${secret} --endpoint ${endpoint}${acceptClientsFlag}`
                 // ]
@@ -432,7 +464,8 @@ WantedBy=default.target`
             copied: false,
             method: "newt",
             clientAddress: "",
-            acceptClients: false
+            acceptClients: false,
+            exitNodeId: undefined
         }
     });
 
@@ -482,6 +515,22 @@ WantedBy=default.target`
                 address: clientAddress
             };
         }
+        if (data.method === "local" && build == "saas") {
+            if (!data.exitNodeId) {
+                toast({
+                    variant: "destructive",
+                    title: t("siteErrorCreate"),
+                    description: t("remoteExitNodeRequired")
+                });
+                setCreateLoading(false);
+                return;
+            }
+
+            payload = {
+                ...payload,
+                exitNodeId: data.exitNodeId
+            };
+        }
 
         const res = await api
             .put<
@@ -513,14 +562,14 @@ WantedBy=default.target`
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 3000);
-                
+
                 const response = await fetch(
                     `https://api.github.com/repos/fosrl/newt/releases/latest`,
                     { signal: controller.signal }
                 );
-                
+
                 clearTimeout(timeoutId);
-                
+
                 if (!response.ok) {
                     throw new Error(
                         t("newtErrorFetchReleases", {
@@ -533,7 +582,7 @@ WantedBy=default.target`
                 currentNewtVersion = latestVersion;
                 setNewtVersion(latestVersion);
             } catch (error) {
-                if (error instanceof Error && error.name === 'AbortError') {
+                if (error instanceof Error && error.name === "AbortError") {
                     console.error(t("newtErrorFetchTimeout"));
                 } else {
                     console.error(
@@ -558,8 +607,10 @@ WantedBy=default.target`
             await api
                 .get(`/org/${orgId}/pick-site-defaults`)
                 .catch((e) => {
-                    // update the default value of the form to be local method
-                    form.setValue("method", "local");
+                    // update the default value of the form to be local method only if local sites are not disabled
+                    if (!env.flags.disableLocalSites) {
+                        form.setValue("method", "local");
+                    }
                 })
                 .then((res) => {
                     if (res && res.status === 200) {
@@ -602,6 +653,37 @@ WantedBy=default.target`
                     }
                 });
 
+            if (build === "saas") {
+                // Fetch remote exit nodes for local sites
+                try {
+                    const remoteExitNodesRes = await api.get<
+                        AxiosResponse<ListRemoteExitNodesResponse>
+                    >(`/org/${orgId}/remote-exit-nodes`);
+
+                    if (
+                        remoteExitNodesRes &&
+                        remoteExitNodesRes.status === 200
+                    ) {
+                        const exitNodes =
+                            remoteExitNodesRes.data.data.remoteExitNodes;
+
+                        // Convert to options for StrategySelect
+                        const exitNodeOptions: RemoteExitNodeOption[] =
+                            exitNodes
+                                .filter((node) => node.exitNodeId !== null)
+                                .map((node) => ({
+                                    id: node.exitNodeId!.toString(),
+                                    title: node.name,
+                                    description: `${node.address?.split("/")[0] || "N/A"} - ${node.endpoint || "N/A"}`
+                                }));
+
+                        setRemoteExitNodeOptions(exitNodeOptions);
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch remote exit nodes:", error);
+                }
+            }
+
             setLoadingPage(false);
         };
 
@@ -612,6 +694,18 @@ WantedBy=default.target`
     useEffect(() => {
         form.setValue("acceptClients", acceptClients);
     }, [acceptClients, form]);
+
+    // Sync form exitNodeId value with local state
+    useEffect(() => {
+        if (build !== "saas") {
+            // dont update the form
+            return;
+        }
+        form.setValue(
+            "exitNodeId",
+            selectedExitNodeId ? parseInt(selectedExitNodeId) : undefined
+        );
+    }, [selectedExitNodeId, form]);
 
     return (
         <>
@@ -920,7 +1014,7 @@ WantedBy=default.target`
                                                 <div className="flex items-center space-x-2 mb-2">
                                                     <CheckboxWithLabel
                                                         id="acceptClients"
-                                                         aria-describedby="acceptClients-desc"
+                                                        aria-describedby="acceptClients-desc"
                                                         checked={acceptClients}
                                                         onCheckedChange={(
                                                             checked
@@ -1023,6 +1117,52 @@ WantedBy=default.target`
                                 </SettingsSectionBody>
                             </SettingsSection>
                         )}
+
+                        {build == "saas" &&
+                            form.watch("method") === "local" && (
+                                <SettingsSection>
+                                    <SettingsSectionHeader>
+                                        <SettingsSectionTitle>
+                                            {t("remoteExitNodeSelection")}
+                                        </SettingsSectionTitle>
+                                        <SettingsSectionDescription>
+                                            {t(
+                                                "remoteExitNodeSelectionDescription"
+                                            )}
+                                        </SettingsSectionDescription>
+                                    </SettingsSectionHeader>
+                                    <SettingsSectionBody>
+                                        {remoteExitNodeOptions.length > 0 ? (
+                                            <StrategySelect
+                                                options={remoteExitNodeOptions}
+                                                defaultValue={
+                                                    selectedExitNodeId
+                                                }
+                                                onChange={(value) => {
+                                                    setSelectedExitNodeId(
+                                                        value
+                                                    );
+                                                }}
+                                                cols={1}
+                                            />
+                                        ) : (
+                                            <Alert variant="destructive">
+                                                <InfoIcon className="h-4 w-4" />
+                                                <AlertTitle className="font-semibold">
+                                                    {t(
+                                                        "noRemoteExitNodesAvailable"
+                                                    )}
+                                                </AlertTitle>
+                                                <AlertDescription>
+                                                    {t(
+                                                        "noRemoteExitNodesAvailableDescription"
+                                                    )}
+                                                </AlertDescription>
+                                            </Alert>
+                                        )}
+                                    </SettingsSectionBody>
+                                </SettingsSection>
+                            )}
                     </SettingsContainer>
 
                     <div className="flex justify-end space-x-2 mt-8">

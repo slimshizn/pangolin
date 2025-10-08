@@ -4,6 +4,7 @@ import { userActions, roleActions, userOrgs } from "@server/db";
 import { and, eq } from "drizzle-orm";
 import createHttpError from "http-errors";
 import HttpCode from "@server/types/HttpCode";
+import { sendUsageNotification } from "@server/routers/org";
 
 export enum ActionsEnum {
     createOrgUser = "createOrgUser",
@@ -60,6 +61,7 @@ export enum ActionsEnum {
     getUser = "getUser",
     setResourcePassword = "setResourcePassword",
     setResourcePincode = "setResourcePincode",
+    setResourceHeaderAuth = "setResourceHeaderAuth",
     setResourceWhitelist = "setResourceWhitelist",
     getResourceWhitelist = "getResourceWhitelist",
     generateAccessToken = "generateAccessToken",
@@ -98,10 +100,23 @@ export enum ActionsEnum {
     listApiKeyActions = "listApiKeyActions",
     listApiKeys = "listApiKeys",
     getApiKey = "getApiKey",
+    getCertificate = "getCertificate",
+    restartCertificate = "restartCertificate",
+    billing = "billing",
     createOrgDomain = "createOrgDomain",
     deleteOrgDomain = "deleteOrgDomain",
     restartOrgDomain = "restartOrgDomain",
+    sendUsageNotification = "sendUsageNotification",
+    createRemoteExitNode = "createRemoteExitNode",
+    updateRemoteExitNode = "updateRemoteExitNode",
+    getRemoteExitNode = "getRemoteExitNode",
+    listRemoteExitNode = "listRemoteExitNode",
+    deleteRemoteExitNode = "deleteRemoteExitNode",
     updateOrgUser = "updateOrgUser",
+    createLoginPage = "createLoginPage",
+    updateLoginPage = "updateLoginPage",
+    getLoginPage = "getLoginPage",
+    deleteLoginPage = "deleteLoginPage",
     applyBlueprint = "applyBlueprint"
 }
 
@@ -180,7 +195,6 @@ export async function checkUserActionPermission(
 
         return roleActionPermission.length > 0;
 
-        return false;
     } catch (error) {
         console.error("Error checking user action permission:", error);
         throw createHttpError(

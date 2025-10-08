@@ -4,6 +4,8 @@ import { Inter } from "next/font/google";
 import { ThemeProvider } from "@app/providers/ThemeProvider";
 import EnvProvider from "@app/providers/EnvProvider";
 import { pullEnv } from "@app/lib/pullEnv";
+import ThemeDataProvider from "@app/providers/PrivateThemeDataProvider";
+import SplashImage from "@app/components/private/SplashImage";
 import SupportStatusProvider from "@app/providers/SupporterStatusProvider";
 import { priv } from "@app/lib/api";
 import { AxiosResponse } from "axios";
@@ -17,13 +19,24 @@ import { getLocale } from "next-intl/server";
 import { Toaster } from "@app/components/ui/toaster";
 
 export const metadata: Metadata = {
-    title: `Dashboard - Pangolin`,
+    title: `Dashboard - ${process.env.BRANDING_APP_NAME || "Pangolin"}`,
     description: "",
+
+    ...(process.env.BRANDING_FAVICON_PATH
+        ? {
+              icons: {
+                  icon: [
+                      {
+                          url: process.env.BRANDING_FAVICON_PATH as string
+                      }
+                  ]
+              }
+          }
+        : {})
 };
 
 export const dynamic = "force-dynamic";
 
-// const font = Figtree({ subsets: ["latin"] });
 const font = Inter({ subsets: ["latin"] });
 
 export default async function RootLayout({
@@ -62,25 +75,44 @@ export default async function RootLayout({
                         enableSystem
                         disableTransitionOnChange
                     >
-                        <EnvProvider env={pullEnv()}>
-                            <LicenseStatusProvider licenseStatus={licenseStatus}>
-                                <SupportStatusProvider
-                                    supporterStatus={supporterData}
+                        <ThemeDataProvider colors={loadBrandingColors()}>
+                            <EnvProvider env={pullEnv()}>
+                                <LicenseStatusProvider
+                                    licenseStatus={licenseStatus}
                                 >
-                                    {/* Main content */}
-                                    <div className="h-full flex flex-col">
-                                        <div className="flex-1 overflow-auto">
-                                            <LicenseViolation />
-                                            {children}
+                                    <SupportStatusProvider
+                                        supporterStatus={supporterData}
+                                    >
+                                        {/* Main content */}
+                                        <div className="h-full flex flex-col">
+                                            <div className="flex-1 overflow-auto">
+                                                <SplashImage>
+                                                    <LicenseViolation />
+                                                    {children}
+                                                </SplashImage>
+                                                <LicenseViolation />
+                                            </div>
                                         </div>
-                                    </div>
-                                </SupportStatusProvider>
-                            </LicenseStatusProvider>
-                        </EnvProvider>
-                        <Toaster />
+                                    </SupportStatusProvider>
+                                </LicenseStatusProvider>
+                                <Toaster />
+                            </EnvProvider>
+                        </ThemeDataProvider>
                     </ThemeProvider>
                 </NextIntlClientProvider>
             </body>
         </html>
     );
+}
+
+function loadBrandingColors() {
+    // this is loaded once on the server and not included in pullEnv
+    // so we don't need to parse the json every time pullEnv is called
+    if (process.env.BRANDING_COLORS) {
+        try {
+            return JSON.parse(process.env.BRANDING_COLORS);
+        } catch (e) {
+            console.error("Failed to parse BRANDING_COLORS", e);
+        }
+    }
 }

@@ -13,7 +13,7 @@ import { fromError } from "zod-validation-error";
 import { getAllowedIps } from "../target/helpers";
 import { proxyToRemote } from "@server/lib/remoteProxy";
 import { getNextAvailableSubnet } from "@server/lib/exitNodes";
-import { createExitNode } from "./createExitNode";
+import { createExitNode } from "./privateCreateExitNode";
 
 // Define Zod schema for request validation
 const getConfigSchema = z.object({

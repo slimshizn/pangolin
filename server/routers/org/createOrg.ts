@@ -24,6 +24,10 @@ import { fromError } from "zod-validation-error";
 import { defaultRoleAllowedActions } from "../role";
 import { OpenAPITags, registry } from "@server/openApi";
 import { isValidCIDR } from "@server/lib/validators";
+import { createCustomer } from "@server/routers/private/billing/createCustomer";
+import { usageService } from "@server/lib/private/billing/usageService";
+import { FeatureId } from "@server/lib/private/billing";
+import { build } from "@server/build";
 
 const createOrgSchema = z
     .object({
@@ -247,6 +251,19 @@ export async function createOrg(
 
         if (error) {
             return next(createHttpError(HttpCode.INTERNAL_SERVER_ERROR, error));
+        }
+
+        if (build == "saas") {
+            // make sure we have the stripe customer
+            const customerId = await createCustomer(orgId, req.user?.email);
+            if (customerId) {
+                await usageService.updateDaily(
+                    orgId,
+                    FeatureId.USERS,
+                    1,
+                    customerId
+                ); // Only 1 because we are creating the org
+            }
         }
 
         return response(res, {

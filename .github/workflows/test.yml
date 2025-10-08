@@ -24,13 +24,19 @@ jobs:
         run: npm ci
 
       - name: Create database index.ts
-        run: echo 'export * from "./sqlite";' > server/db/index.ts
+        run: npm run set:sqlite
+
+      - name: Create build file
+        run: npm run set:oss
 
       - name: Generate database migrations
         run: npm run db:sqlite:generate
 
       - name: Apply database migrations
         run: npm run db:sqlite:push
+
+      - name: Test with tsc
+        run: npx tsc --noEmit
 
       - name: Start app in background
         run: nohup npm run dev &

@@ -35,11 +35,11 @@ export default function ManagedPage() {
             <SettingsContainer>
                 <SettingsSection>
                     <SettingsSectionBody>
-                        <p className="text-muted-foreground mb-4">
+                        <p className="mb-4">
                             <strong>{t("managedSelfHosted.introTitle")}</strong>{" "}
                             {t("managedSelfHosted.introDescription")}
                         </p>
-                        <p className="text-muted-foreground mb-6">
+                        <p className="mb-6">
                             {t("managedSelfHosted.introDetail")}
                         </p>
 

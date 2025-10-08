@@ -136,7 +136,7 @@ async function executeScripts() {
         const pendingMigrations = lastExecuted
             .map((m) => m)
             .sort((a, b) => semver.compare(b.version, a.version));
-        const startVersion = pendingMigrations[0]?.version ?? "0.0.0";
+        const startVersion = pendingMigrations[0]?.version ?? APP_VERSION;
         console.log(`Starting migrations from version ${startVersion}`);
 
         const migrationsToRun = migrations.filter((migration) =>

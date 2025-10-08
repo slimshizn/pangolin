@@ -6,7 +6,7 @@ import { z } from "zod";
 import { db } from "@server/db";
 import { User, securityKeys, users, webauthnChallenge } from "@server/db";
 import { eq, and, lt } from "drizzle-orm";
-import { response } from "@server/lib";
+import { response } from "@server/lib/response";
 import logger from "@server/logger";
 import {
     generateRegistrationOptions,

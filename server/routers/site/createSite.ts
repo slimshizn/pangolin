@@ -42,15 +42,15 @@ const createSiteSchema = z
         address: z.string().optional(),
         type: z.enum(["newt", "wireguard", "local"])
     })
-    .strict()
-    .refine((data) => {
-        if (data.type === "local") {
-            return !config.getRawConfig().flags?.disable_local_sites;
-        } else if (data.type === "wireguard") {
-            return !config.getRawConfig().flags?.disable_basic_wireguard_sites;
-        }
-        return true;
-    });
+    .strict();
+// .refine((data) => {
+//     if (data.type === "local") {
+//         return !config.getRawConfig().flags?.disable_local_sites;
+//     } else if (data.type === "wireguard") {
+//         return !config.getRawConfig().flags?.disable_basic_wireguard_sites;
+//     }
+//     return true;
+// });
 
 export type CreateSiteBody = z.infer<typeof createSiteSchema>;
 

@@ -27,7 +27,7 @@ import { orgNavSections } from "@app/app/navigation";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-    title: `Settings - Pangolin`,
+    title: `Settings - ${process.env.BRANDING_APP_NAME || "Pangolin"}`,
     description: ""
 };
 

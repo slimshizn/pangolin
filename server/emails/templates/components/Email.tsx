@@ -17,7 +17,7 @@ export function EmailLetterHead() {
         <div className="px-6 pt-8 pb-2 text-center">
             <Img
                 src="https://fossorial-public-assets.s3.us-east-1.amazonaws.com/word_mark_black.png"
-                alt="Fossorial"
+                alt="Pangolin Logo"
                 width="120"
                 height="auto"
                 className="mx-auto"
@@ -107,7 +107,7 @@ export function EmailSignature() {
             <p className="mb-2">
                 Best regards,
                 <br />
-                <strong>The Fossorial Team</strong>
+                <strong>The Pangolin Team</strong>
             </p>
         </div>
     );

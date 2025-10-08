@@ -28,4 +28,5 @@ LICENSE
 CONTRIBUTING.md
 dist
 .git
+migrations/
 config/

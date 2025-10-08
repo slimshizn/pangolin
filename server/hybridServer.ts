@@ -3,7 +3,7 @@ import config from "@server/lib/config";
 import { createWebSocketClient } from "./routers/ws/client";
 import { addPeer, deletePeer } from "./routers/gerbil/peers";
 import { db, exitNodes } from "./db";
-import { TraefikConfigManager } from "./lib/traefikConfig";
+import { TraefikConfigManager } from "./lib/traefik/TraefikConfigManager";
 import { tokenManager } from "./lib/tokenManager";
 import { APP_VERSION } from "./lib/consts";
 import axios from "axios";

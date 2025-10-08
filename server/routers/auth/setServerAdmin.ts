@@ -7,7 +7,7 @@ import { generateId } from "@server/auth/sessions/app";
 import logger from "@server/logger";
 import { hashPassword } from "@server/auth/password";
 import { passwordSchema } from "@server/auth/passwordSchema";
-import { response } from "@server/lib";
+import { response } from "@server/lib/response";
 import { db, users, setupTokens } from "@server/db";
 import { eq, and } from "drizzle-orm";
 import { UserType } from "@server/types/UserTypes";

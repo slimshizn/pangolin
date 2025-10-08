@@ -1,0 +1,21 @@
+services:
+  # PostgreSQL Service
+  db:
+    image: postgres:17 # Use the PostgreSQL 17 image
+    container_name: dev_postgres # Name your PostgreSQL container
+    environment:
+      POSTGRES_DB: postgres # Default database name
+      POSTGRES_USER: postgres # Default user
+      POSTGRES_PASSWORD: password # Default password (change for production!)
+    volumes:
+      - ./config/postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432" # Map host port 5432 to container port 5432
+    restart: no 
+
+  redis:
+    image: redis:latest # Use the latest Redis image
+    container_name: dev_redis # Name your Redis container
+    ports:
+      - "6379:6379" # Map host port 6379 to container port 6379
+    restart: no

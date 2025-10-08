@@ -38,7 +38,10 @@ export default function DashboardLoginForm({
         <Card className="shadow-md w-full max-w-md">
             <CardHeader className="border-b">
                 <div className="flex flex-row items-center justify-center">
-                    <BrandingLogo height={58} width={175} />
+                    <BrandingLogo
+                        height={env.branding.logo?.authPage?.height || 58}
+                        width={env.branding.logo?.authPage?.width || 175}
+                    />
                 </div>
                 <div className="text-center space-y-1 pt-3">
                     <p className="text-muted-foreground">{getSubtitle()}</p>

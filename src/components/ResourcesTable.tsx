@@ -371,7 +371,7 @@ export default function ResourcesTable({
                     <div className="flex items-center space-x-2">
                         {!resourceRow.http ? (
                             <CopyToClipboard
-                                text={resourceRow.proxyPort!.toString()}
+                                text={resourceRow.proxyPort?.toString() || ""}
                                 isLink={false}
                             />
                         ) : !resourceRow.domainId ? (
@@ -547,7 +547,7 @@ export default function ResourcesTable({
                 const resourceRow = row.original;
                 return (
                     <CopyToClipboard
-                        text={resourceRow.proxyPort!.toString()}
+                        text={resourceRow.proxyPort?.toString() || ""}
                         isLink={false}
                     />
                 );

@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { useEnvContext } from "@app/hooks/useEnvContext";
 import { createApiClient, formatAxiosError } from "@app/lib/api";
-import { GenerateOidcUrlResponse } from "@server/routers/idp";
 import { AxiosResponse } from "axios";
-import { useRouter } from "next/navigation";
+import { redirect, useRouter } from "next/navigation";
 import {
     Card,
     CardHeader,
@@ -16,17 +15,20 @@ import {
 import { Alert, AlertDescription } from "@app/components/ui/alert";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { generateOidcUrlProxy } from "@app/actions/server";
 
 type AutoLoginHandlerProps = {
     resourceId: number;
     skipToIdpId: number;
     redirectUrl: string;
+    orgId?: string;
 };
 
 export default function AutoLoginHandler({
     resourceId,
     skipToIdpId,
-    redirectUrl
+    redirectUrl,
+    orgId
 }: AutoLoginHandlerProps) {
     const { env } = useEnvContext();
     const api = createApiClient({ env });
@@ -40,24 +42,39 @@ export default function AutoLoginHandler({
         async function initiateAutoLogin() {
             setLoading(true);
 
+            let doRedirect: string | undefined;
             try {
-                const res = await api.post<
-                    AxiosResponse<GenerateOidcUrlResponse>
-                >(`/auth/idp/${skipToIdpId}/oidc/generate-url`, {
-                    redirectUrl
-                });
+                const response = await generateOidcUrlProxy(
+                    skipToIdpId,
+                    redirectUrl,
+                    orgId
+                );
 
-                if (res.data.data.redirectUrl) {
-                    // Redirect to the IDP for authentication
-                    window.location.href = res.data.data.redirectUrl;
+                if (response.error) {
+                    setError(response.message);
+                    setLoading(false);
+                    return;
+                }
+
+                const data = response.data;
+                const url = data?.redirectUrl;
+                if (url) {
+                    doRedirect = url;
                 } else {
                     setError(t("autoLoginErrorNoRedirectUrl"));
                 }
-            } catch (e) {
+            } catch (e: any) {
                 console.error("Failed to generate OIDC URL:", e);
-                setError(formatAxiosError(e, t("autoLoginErrorGeneratingUrl")));
+                setError(
+                    t("autoLoginErrorGeneratingUrl", {
+                        defaultValue: "An unexpected error occurred. Please try again."
+                    })
+                );
             } finally {
                 setLoading(false);
+                if (doRedirect) {
+                    redirect(doRedirect);
+                }
             }
         }
 
@@ -69,7 +86,9 @@ export default function AutoLoginHandler({
             <Card className="w-full max-w-md">
                 <CardHeader>
                     <CardTitle>{t("autoLoginTitle")}</CardTitle>
-                    <CardDescription>{t("autoLoginDescription")}</CardDescription>
+                    <CardDescription>
+                        {t("autoLoginDescription")}
+                    </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center space-y-4">
                     {loading && (

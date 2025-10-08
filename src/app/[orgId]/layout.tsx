@@ -9,6 +9,10 @@ import { AxiosResponse } from "axios";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import SetLastOrgCookie from "@app/components/SetLastOrgCookie";
+import PrivateSubscriptionStatusProvider from "@app/providers/PrivateSubscriptionStatusProvider";
+import { GetOrgSubscriptionResponse } from "@server/routers/private/billing/getOrgSubscription";
+import { pullEnv } from "@app/lib/pullEnv";
+import { build } from "@server/build";
 
 export default async function OrgLayout(props: {
     children: React.ReactNode;
@@ -17,6 +21,7 @@ export default async function OrgLayout(props: {
     const cookie = await authCookieHeader();
     const params = await props.params;
     const orgId = params.orgId;
+    const env = pullEnv();
 
     if (!orgId) {
         redirect(`/`);
@@ -50,10 +55,31 @@ export default async function OrgLayout(props: {
         redirect(`/`);
     }
 
+    let subscriptionStatus = null;
+    if (build != "oss") {
+        try {
+            const getSubscription = cache(() =>
+                internal.get<AxiosResponse<GetOrgSubscriptionResponse>>(
+                    `/org/${orgId}/billing/subscription`,
+                    cookie
+                )
+            );
+            const subRes = await getSubscription();
+            subscriptionStatus = subRes.data.data;
+        } catch (error) {
+            // If subscription fetch fails, keep subscriptionStatus as null
+            console.error("Failed to fetch subscription status:", error);
+        }
+    }
+
     return (
-        <>
+        <PrivateSubscriptionStatusProvider
+            subscriptionStatus={subscriptionStatus}
+            env={env.app.environment}
+            sandbox_mode={env.app.sandbox_mode}
+        >
             {props.children}
             <SetLastOrgCookie orgId={orgId} />
-        </>
+        </PrivateSubscriptionStatusProvider>
     );
 }

@@ -1,0 +1,17 @@
+meta {
+  name: Set API Key Actions
+  type: http
+  seq: 5
+}
+
+post {
+  url: http://localhost:3000/api/v1/api-key/ex0izu2c37fjz9x/actions
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "actionIds": ["listSites"]
+  }
+}

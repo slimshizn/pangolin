@@ -58,7 +58,7 @@ import {
 import { ListResourceRulesResponse } from "@server/routers/resource/listResourceRules";
 import { SwitchInput } from "@app/components/SwitchInput";
 import { Alert, AlertDescription, AlertTitle } from "@app/components/ui/alert";
-import { ArrowUpDown, Check, InfoIcon, X } from "lucide-react";
+import { ArrowUpDown, Check, InfoIcon, X, ChevronsUpDown } from "lucide-react";
 import {
     InfoSection,
     InfoSections,
@@ -73,6 +73,20 @@ import {
 import { Switch } from "@app/components/ui/switch";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { COUNTRIES } from "@server/db/countries";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList
+} from "@app/components/ui/command";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger
+} from "@app/components/ui/popover";
 
 // Schema for rule validation
 const addRuleSchema = z.object({
@@ -98,9 +112,13 @@ export default function ResourceRules(props: {
     const [loading, setLoading] = useState(false);
     const [pageLoading, setPageLoading] = useState(true);
     const [rulesEnabled, setRulesEnabled] = useState(resource.applyRules);
+    const [openCountrySelect, setOpenCountrySelect] = useState(false);
+    const [countrySelectValue, setCountrySelectValue] = useState("");
+    const [openAddRuleCountrySelect, setOpenAddRuleCountrySelect] = useState(false);
     const router = useRouter();
     const t = useTranslations();
-
+    const env = useEnvContext();
+    const isMaxmindAvailable = env.env.server.maxmind_db_path && env.env.server.maxmind_db_path.length > 0;
 
     const RuleAction = {
         ACCEPT: t('alwaysAllow'),
@@ -111,7 +129,8 @@ export default function ResourceRules(props: {
     const RuleMatch = {
         PATH: t('path'),
         IP: "IP",
-        CIDR: t('ipAddressRange')
+        CIDR: t('ipAddressRange'),
+        GEOIP: t('country')
     } as const;
 
     const addRuleForm = useForm({
@@ -193,6 +212,15 @@ export default function ResourceRules(props: {
             setLoading(false);
             return;
         }
+        if (data.match === "GEOIP" && !COUNTRIES.some(c => c.code === data.value)) {
+            toast({
+                variant: "destructive",
+                title: t('rulesErrorInvalidCountry'),
+                description: t('rulesErrorInvalidCountryDescription') || "Invalid country code."
+            });
+            setLoading(false);
+            return;
+        }
 
         // find the highest priority and add one
         let priority = data.priority;
@@ -242,6 +270,8 @@ export default function ResourceRules(props: {
                 return t('rulesMatchIpAddress');
             case "PATH":
                 return t('rulesMatchUrl');
+            case "GEOIP":
+                return t('rulesMatchCountry');
         }
     }
 
@@ -461,8 +491,8 @@ export default function ResourceRules(props: {
             cell: ({ row }) => (
                 <Select
                     defaultValue={row.original.match}
-                    onValueChange={(value: "CIDR" | "IP" | "PATH") =>
-                        updateRule(row.original.ruleId, { match: value })
+                    onValueChange={(value: "CIDR" | "IP" | "PATH" | "GEOIP") =>
+                        updateRule(row.original.ruleId, { match: value, value: value === "GEOIP" ? "US" : row.original.value })
                     }
                 >
                     <SelectTrigger className="min-w-[125px]">
@@ -472,6 +502,9 @@ export default function ResourceRules(props: {
                         <SelectItem value="PATH">{RuleMatch.PATH}</SelectItem>
                         <SelectItem value="IP">{RuleMatch.IP}</SelectItem>
                         <SelectItem value="CIDR">{RuleMatch.CIDR}</SelectItem>
+                        {isMaxmindAvailable && (
+                            <SelectItem value="GEOIP">{RuleMatch.GEOIP}</SelectItem>
+                        )}
                     </SelectContent>
                 </Select>
             )
@@ -480,15 +513,61 @@ export default function ResourceRules(props: {
             accessorKey: "value",
             header: t('value'),
             cell: ({ row }) => (
-                <Input
-                    defaultValue={row.original.value}
-                    className="min-w-[200px]"
-                    onBlur={(e) =>
-                        updateRule(row.original.ruleId, {
-                            value: e.target.value
-                        })
-                    }
-                />
+                row.original.match === "GEOIP" ? (
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button
+                                variant="outline"
+                                role="combobox"
+                                className="min-w-[200px] justify-between"
+                            >
+                                {row.original.value
+                                    ? COUNTRIES.find((country) => country.code === row.original.value)?.name +
+                                      " (" + row.original.value + ")"
+                                    : t('selectCountry')}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="min-w-[200px] p-0">
+                            <Command>
+                                <CommandInput placeholder={t('searchCountries')} />
+                                <CommandList>
+                                    <CommandEmpty>{t('noCountryFound')}</CommandEmpty>
+                                    <CommandGroup>
+                                        {COUNTRIES.map((country) => (
+                                            <CommandItem
+                                                key={country.code}
+                                                value={country.name}
+                                                onSelect={() => {
+                                                    updateRule(row.original.ruleId, { value: country.code });
+                                                }}
+                                            >
+                                                <Check
+                                                    className={`mr-2 h-4 w-4 ${
+                                                        row.original.value === country.code
+                                                            ? "opacity-100"
+                                                            : "opacity-0"
+                                                    }`}
+                                                />
+                                                {country.name} ({country.code})
+                                            </CommandItem>
+                                        ))}
+                                    </CommandGroup>
+                                </CommandList>
+                            </Command>
+                        </PopoverContent>
+                    </Popover>
+                ) : (
+                    <Input
+                        defaultValue={row.original.value}
+                        className="min-w-[200px]"
+                        onBlur={(e) =>
+                            updateRule(row.original.ruleId, {
+                                value: e.target.value
+                            })
+                        }
+                    />
+                )
             )
         },
         {
@@ -650,9 +729,7 @@ export default function ResourceRules(props: {
                                                 <FormControl>
                                                     <Select
                                                         value={field.value}
-                                                        onValueChange={
-                                                            field.onChange
-                                                        }
+                                                        onValueChange={field.onChange}
                                                     >
                                                         <SelectTrigger className="w-full">
                                                             <SelectValue />
@@ -669,6 +746,11 @@ export default function ResourceRules(props: {
                                                             <SelectItem value="CIDR">
                                                                 {RuleMatch.CIDR}
                                                             </SelectItem>
+                                                            {isMaxmindAvailable && (
+                                                                <SelectItem value="GEOIP">
+                                                                    {RuleMatch.GEOIP}
+                                                                </SelectItem>
+                                                            )}
                                                         </SelectContent>
                                                     </Select>
                                                 </FormControl>
@@ -692,7 +774,55 @@ export default function ResourceRules(props: {
                                                     }
                                                 />
                                                 <FormControl>
-                                                    <Input {...field}/>
+                                                    {addRuleForm.watch("match") === "GEOIP" ? (
+                                                        <Popover open={openAddRuleCountrySelect} onOpenChange={setOpenAddRuleCountrySelect}>
+                                                            <PopoverTrigger asChild>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    role="combobox"
+                                                                    aria-expanded={openAddRuleCountrySelect}
+                                                                    className="w-full justify-between"
+                                                                >
+                                                                    {field.value
+                                                                        ? COUNTRIES.find((country) => country.code === field.value)?.name +
+                                                                          " (" + field.value + ")"
+                                                                        : t('selectCountry')}
+                                                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-full p-0">
+                                                                <Command>
+                                                                    <CommandInput placeholder={t('searchCountries')} />
+                                                                    <CommandList>
+                                                                        <CommandEmpty>{t('noCountryFound')}</CommandEmpty>
+                                                                        <CommandGroup>
+                                                                            {COUNTRIES.map((country) => (
+                                                                                <CommandItem
+                                                                                    key={country.code}
+                                                                                    value={country.name}
+                                                                                    onSelect={() => {
+                                                                                        field.onChange(country.code);
+                                                                                        setOpenAddRuleCountrySelect(false);
+                                                                                    }}
+                                                                                >
+                                                                                    <Check
+                                                                                        className={`mr-2 h-4 w-4 ${
+                                                                                            field.value === country.code
+                                                                                                ? "opacity-100"
+                                                                                                : "opacity-0"
+                                                                                        }`}
+                                                                                    />
+                                                                                    {country.name} ({country.code})
+                                                                                </CommandItem>
+                                                                            ))}
+                                                                        </CommandGroup>
+                                                                    </CommandList>
+                                                                </Command>
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    ) : (
+                                                        <Input {...field} />
+                                                    )}
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>

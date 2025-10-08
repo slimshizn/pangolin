@@ -8,6 +8,8 @@ import {
     InfoSectionTitle
 } from "@app/components/InfoSection";
 import { useTranslations } from "next-intl";
+import { useEnvContext } from "@app/hooks/useEnvContext";
+import { build } from "@server/build";
 
 type PermissionsSelectBoxProps = {
     root?: boolean;
@@ -17,6 +19,7 @@ type PermissionsSelectBoxProps = {
 
 function getActionsCategories(root: boolean) {
     const t = useTranslations();
+    const { env } = useEnvContext();
 
     const actionsByCategory: Record<string, Record<string, string>> = {
         Organization: {
@@ -34,12 +37,12 @@ function getActionsCategories(root: boolean) {
         },
 
         Site: {
-            [t('actionCreateSite')]: "createSite",
-            [t('actionDeleteSite')]: "deleteSite",
-            [t('actionGetSite')]: "getSite",
-            [t('actionListSites')]: "listSites",
-            [t('actionUpdateSite')]: "updateSite",
-            [t('actionListSiteRoles')]: "listSiteRoles"
+            [t("actionCreateSite")]: "createSite",
+            [t("actionDeleteSite")]: "deleteSite",
+            [t("actionGetSite")]: "getSite",
+            [t("actionListSites")]: "listSites",
+            [t("actionUpdateSite")]: "updateSite",
+            [t("actionListSiteRoles")]: "listSiteRoles"
         },
 
         Resource: {
@@ -54,6 +57,7 @@ function getActionsCategories(root: boolean) {
             [t('actionListAllowedResourceRoles')]: "listResourceRoles",
             [t('actionSetResourcePassword')]: "setResourcePassword",
             [t('actionSetResourcePincode')]: "setResourcePincode",
+            [t('actionSetResourceHeaderAuth')]: "setResourceHeaderAuth",
             [t('actionSetResourceEmailWhitelist')]: "setResourceWhitelist",
             [t('actionGetResourceEmailWhitelist')]: "getResourceWhitelist",
             [t('actionCreateSiteResource')]: "createSiteResource",
@@ -64,26 +68,26 @@ function getActionsCategories(root: boolean) {
         },
 
         Target: {
-            [t('actionCreateTarget')]: "createTarget",
-            [t('actionDeleteTarget')]: "deleteTarget",
-            [t('actionGetTarget')]: "getTarget",
-            [t('actionListTargets')]: "listTargets",
-            [t('actionUpdateTarget')]: "updateTarget"
+            [t("actionCreateTarget")]: "createTarget",
+            [t("actionDeleteTarget")]: "deleteTarget",
+            [t("actionGetTarget")]: "getTarget",
+            [t("actionListTargets")]: "listTargets",
+            [t("actionUpdateTarget")]: "updateTarget"
         },
 
         Role: {
-            [t('actionCreateRole')]: "createRole",
-            [t('actionDeleteRole')]: "deleteRole",
-            [t('actionGetRole')]: "getRole",
-            [t('actionListRole')]: "listRoles",
-            [t('actionUpdateRole')]: "updateRole",
-            [t('actionListAllowedRoleResources')]: "listRoleResources",
-            [t('actionAddUserRole')]: "addUserRole"
+            [t("actionCreateRole")]: "createRole",
+            [t("actionDeleteRole")]: "deleteRole",
+            [t("actionGetRole")]: "getRole",
+            [t("actionListRole")]: "listRoles",
+            [t("actionUpdateRole")]: "updateRole",
+            [t("actionListAllowedRoleResources")]: "listRoleResources",
+            [t("actionAddUserRole")]: "addUserRole"
         },
         "Access Token": {
-            [t('actionGenerateAccessToken')]: "generateAccessToken",
-            [t('actionDeleteAccessToken')]: "deleteAcessToken",
-            [t('actionListAccessTokens')]: "listAccessTokens"
+            [t("actionGenerateAccessToken")]: "generateAccessToken",
+            [t("actionDeleteAccessToken")]: "deleteAcessToken",
+            [t("actionListAccessTokens")]: "listAccessTokens"
         },
 
         "Resource Rule": {
@@ -102,36 +106,52 @@ function getActionsCategories(root: boolean) {
         }
     };
 
+    if (env.flags.enableClients) {
+        actionsByCategory["Clients"] = {
+            "Create Client": "createClient",
+            "Delete Client": "deleteClient",
+            "Update Client": "updateClient",
+            "List Clients": "listClients",
+            "Get Client": "getClient"
+        };
+    }
+
     if (root) {
         actionsByCategory["Organization"] = {
-            [t('actionListOrgs')]: "listOrgs",
-            [t('actionCheckOrgId')]: "checkOrgId",
-            [t('actionCreateOrg')]: "createOrg",
-            [t('actionDeleteOrg')]: "deleteOrg",
-            [t('actionListApiKeys')]: "listApiKeys",
-            [t('actionListApiKeyActions')]: "listApiKeyActions",
-            [t('actionSetApiKeyActions')]: "setApiKeyActions",
-            [t('actionCreateApiKey')]: "createApiKey",
-            [t('actionDeleteApiKey')]: "deleteApiKey",
+            [t("actionListOrgs")]: "listOrgs",
+            [t("actionCheckOrgId")]: "checkOrgId",
+            [t("actionCreateOrg")]: "createOrg",
+            [t("actionDeleteOrg")]: "deleteOrg",
+            [t("actionListApiKeys")]: "listApiKeys",
+            [t("actionListApiKeyActions")]: "listApiKeyActions",
+            [t("actionSetApiKeyActions")]: "setApiKeyActions",
+            [t("actionCreateApiKey")]: "createApiKey",
+            [t("actionDeleteApiKey")]: "deleteApiKey",
             ...actionsByCategory["Organization"]
         };
 
         actionsByCategory["Identity Provider (IDP)"] = {
-            [t('actionCreateIdp')]: "createIdp",
-            [t('actionUpdateIdp')]: "updateIdp",
-            [t('actionDeleteIdp')]: "deleteIdp",
-            [t('actionListIdps')]: "listIdps",
-            [t('actionGetIdp')]: "getIdp",
-            [t('actionCreateIdpOrg')]: "createIdpOrg",
-            [t('actionDeleteIdpOrg')]: "deleteIdpOrg",
-            [t('actionListIdpOrgs')]: "listIdpOrgs",
-            [t('actionUpdateIdpOrg')]: "updateIdpOrg"
+            [t("actionCreateIdp")]: "createIdp",
+            [t("actionUpdateIdp")]: "updateIdp",
+            [t("actionDeleteIdp")]: "deleteIdp",
+            [t("actionListIdps")]: "listIdps",
+            [t("actionGetIdp")]: "getIdp",
+            [t("actionCreateIdpOrg")]: "createIdpOrg",
+            [t("actionDeleteIdpOrg")]: "deleteIdpOrg",
+            [t("actionListIdpOrgs")]: "listIdpOrgs",
+            [t("actionUpdateIdpOrg")]: "updateIdpOrg"
         };
 
         actionsByCategory["User"] = {
-            [t('actionUpdateUser')]: "updateUser",
-            [t('actionGetUser')]: "getUser"
+            [t("actionUpdateUser")]: "updateUser",
+            [t("actionGetUser")]: "getUser"
         };
+
+        if (build == "saas") {
+            actionsByCategory["SAAS"] = {
+                ["Send Usage Notification Email"]: "sendUsageNotification",
+            };
+        }
     }
 
     return actionsByCategory;
@@ -189,7 +209,7 @@ export default function PermissionsSelectBox({
                 <CheckboxWithLabel
                     variant="outlinePrimarySquare"
                     id="toggle-all-permissions"
-                    label={t('permissionsAllowAll')}
+                    label={t("permissionsAllowAll")}
                     checked={allPermissionsChecked}
                     onCheckedChange={(checked) =>
                         toggleAllPermissions(checked as boolean)
@@ -208,7 +228,7 @@ export default function PermissionsSelectBox({
                                         <CheckboxWithLabel
                                             variant="outlinePrimarySquare"
                                             id={`toggle-all-${category}`}
-                                            label={t('allowAll')}
+                                            label={t("allowAll")}
                                             checked={allChecked}
                                             onCheckedChange={(checked) =>
                                                 toggleAllInCategory(

@@ -73,11 +73,16 @@ import {
     CircleCheck,
     CircleX,
     ArrowRight,
-    MoveRight
+    Plus,
+    MoveRight,
+    ArrowUp,
+    Info,
+    ArrowDown
 } from "lucide-react";
 import { ContainersSelector } from "@app/components/ContainersSelector";
 import { useTranslations } from "next-intl";
 import { build } from "@server/build";
+import HealthCheckDialog from "@/components/HealthCheckDialog";
 import { DockerManager, DockerState } from "@app/lib/docker";
 import { Container } from "@server/routers/site";
 import {
@@ -95,50 +100,84 @@ import {
     CommandItem,
     CommandList
 } from "@app/components/ui/command";
-import { Badge } from "@app/components/ui/badge";
 import { parseHostTarget } from "@app/lib/parseHostTarget";
 import { HeadersInput } from "@app/components/HeadersInput";
+import {
+    PathMatchDisplay,
+    PathMatchModal,
+    PathRewriteDisplay,
+    PathRewriteModal
+} from "@app/components/PathMatchRenameModal";
+import { Badge } from "@app/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@app/components/ui/tooltip";
 
-const addTargetSchema = z.object({
-    ip: z.string().refine(isTargetValid),
-    method: z.string().nullable(),
-    port: z.coerce.number().int().positive(),
-    siteId: z.number().int().positive(),
-    path: z.string().optional().nullable(),
-    pathMatchType: z.enum(["exact", "prefix", "regex"]).optional().nullable()
-}).refine(
-    (data) => {
-        // If path is provided, pathMatchType must be provided
-        if (data.path && !data.pathMatchType) {
-            return false;
-        }
-        // If pathMatchType is provided, path must be provided
-        if (data.pathMatchType && !data.path) {
-            return false;
-        }
-        // Validate path based on pathMatchType
-        if (data.path && data.pathMatchType) {
-            switch (data.pathMatchType) {
-                case "exact":
-                case "prefix":
-                    // Path should start with /
-                    return data.path.startsWith("/");
-                case "regex":
-                    // Validate regex
-                    try {
-                        new RegExp(data.path);
-                        return true;
-                    } catch {
-                        return false;
-                    }
+const addTargetSchema = z
+    .object({
+        ip: z.string().refine(isTargetValid),
+        method: z.string().nullable(),
+        port: z.coerce.number().int().positive(),
+        siteId: z.number().int().positive(),
+        path: z.string().optional().nullable(),
+        pathMatchType: z
+            .enum(["exact", "prefix", "regex"])
+            .optional()
+            .nullable(),
+        rewritePath: z.string().optional().nullable(),
+        rewritePathType: z
+            .enum(["exact", "prefix", "regex", "stripPrefix"])
+            .optional()
+            .nullable(),
+        priority: z.number().int().min(1).max(1000)
+    })
+    .refine(
+        (data) => {
+            // If path is provided, pathMatchType must be provided
+            if (data.path && !data.pathMatchType) {
+                return false;
             }
+            // If pathMatchType is provided, path must be provided
+            if (data.pathMatchType && !data.path) {
+                return false;
+            }
+            // Validate path based on pathMatchType
+            if (data.path && data.pathMatchType) {
+                switch (data.pathMatchType) {
+                    case "exact":
+                    case "prefix":
+                        // Path should start with /
+                        return data.path.startsWith("/");
+                    case "regex":
+                        // Validate regex
+                        try {
+                            new RegExp(data.path);
+                            return true;
+                        } catch {
+                            return false;
+                        }
+                }
+            }
+            return true;
+        },
+        {
+            message: "Invalid path configuration"
         }
-        return true;
-    },
-    {
-        message: "Invalid path configuration"
-    }
-);
+    )
+    .refine(
+        (data) => {
+            // If rewritePath is provided, rewritePathType must be provided
+            if (data.rewritePath && !data.rewritePathType) {
+                return false;
+            }
+            // If rewritePathType is provided, rewritePath must be provided
+            if (data.rewritePathType && !data.rewritePath) {
+                return false;
+            }
+            return true;
+        },
+        {
+            message: "Invalid rewrite path configuration"
+        }
+    );
 
 const targetsSettingsSchema = z.object({
     stickySession: z.boolean()
@@ -210,6 +249,10 @@ export default function ReverseProxyTargets(props: {
     const [proxySettingsLoading, setProxySettingsLoading] = useState(false);
 
     const [pageLoading, setPageLoading] = useState(true);
+    const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+    const [healthCheckDialogOpen, setHealthCheckDialogOpen] = useState(false);
+    const [selectedTargetForHealthCheck, setSelectedTargetForHealthCheck] =
+        useState<LocalTarget | null>(null);
     const router = useRouter();
 
     const proxySettingsSchema = z.object({
@@ -227,7 +270,9 @@ export default function ReverseProxyTargets(props: {
                     message: t("proxyErrorInvalidHeader")
                 }
             ),
-        headers: z.array(z.object({ name: z.string(), value: z.string() })).nullable()
+        headers: z
+            .array(z.object({ name: z.string(), value: z.string() }))
+            .nullable()
     });
 
     const tlsSettingsSchema = z.object({
@@ -259,8 +304,11 @@ export default function ReverseProxyTargets(props: {
             method: resource.http ? "http" : null,
             port: "" as any as number,
             path: null,
-            pathMatchType: null
-        }
+            pathMatchType: null,
+            rewritePath: null,
+            rewritePathType: null,
+            priority: 100
+        } as z.infer<typeof addTargetSchema>
     });
 
     const watchedIp = addTargetForm.watch("ip");
@@ -436,11 +484,28 @@ export default function ReverseProxyTargets(props: {
             ...data,
             path: data.path || null,
             pathMatchType: data.pathMatchType || null,
+            rewritePath: data.rewritePath || null,
+            rewritePathType: data.rewritePathType || null,
             siteType: site?.type || null,
             enabled: true,
             targetId: new Date().getTime(),
             new: true,
-            resourceId: resource.resourceId
+            resourceId: resource.resourceId,
+            priority: 100,
+            hcEnabled: false,
+            hcPath: null,
+            hcMethod: null,
+            hcInterval: null,
+            hcTimeout: null,
+            hcHeaders: null,
+            hcScheme: null,
+            hcHostname: null,
+            hcPort: null,
+            hcFollowRedirects: null,
+            hcHealth: "unknown",
+            hcStatus: null,
+            hcMode: null,
+            hcUnhealthyInterval: null
         };
 
         setTargets([...targets, newTarget]);
@@ -449,7 +514,10 @@ export default function ReverseProxyTargets(props: {
             method: resource.http ? "http" : null,
             port: "" as any as number,
             path: null,
-            pathMatchType: null
+            pathMatchType: null,
+            rewritePath: null,
+            rewritePathType: null,
+            priority: 100,
         });
     }
 
@@ -479,6 +547,26 @@ export default function ReverseProxyTargets(props: {
         );
     }
 
+    function updateTargetHealthCheck(targetId: number, config: any) {
+        setTargets(
+            targets.map((target) =>
+                target.targetId === targetId
+                    ? {
+                          ...target,
+                          ...config,
+                          updated: true
+                      }
+                    : target
+            )
+        );
+    }
+
+    const openHealthCheckDialog = (target: LocalTarget) => {
+        console.log(target);
+        setSelectedTargetForHealthCheck(target);
+        setHealthCheckDialogOpen(true);
+    };
+
     async function saveAllSettings() {
         try {
             setTargetsLoading(true);
@@ -493,8 +581,22 @@ export default function ReverseProxyTargets(props: {
                     method: target.method,
                     enabled: target.enabled,
                     siteId: target.siteId,
+                    hcEnabled: target.hcEnabled,
+                    hcPath: target.hcPath || null,
+                    hcScheme: target.hcScheme || null,
+                    hcHostname: target.hcHostname || null,
+                    hcPort: target.hcPort || null,
+                    hcInterval: target.hcInterval || null,
+                    hcTimeout: target.hcTimeout || null,
+                    hcHeaders: target.hcHeaders || null,
+                    hcFollowRedirects: target.hcFollowRedirects || null,
+                    hcMethod: target.hcMethod || null,
+                    hcStatus: target.hcStatus || null,
                     path: target.path,
-                    pathMatchType: target.pathMatchType
+                    pathMatchType: target.pathMatchType,
+                    rewritePath: target.rewritePath,
+                    rewritePathType: target.rewritePathType,
+                    priority: target.priority
                 };
 
                 if (target.new) {
@@ -568,94 +670,114 @@ export default function ReverseProxyTargets(props: {
 
     const columns: ColumnDef<LocalTarget>[] = [
         {
-            accessorKey: "path",
-            header: t("matchPath"),
+            id: "priority",
+            header: () => (
+                <div className="flex items-center gap-2">
+                    Priority
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <Info className="h-4 w-4 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                                <p>Higher priority routes are evaluated first. Priority = 100 means automatic ordering (system decides). Use another number to enforce manual priority.</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                </div>
+            ),
             cell: ({ row }) => {
-                const [showPathInput, setShowPathInput] = useState(
-                    !!(row.original.path || row.original.pathMatchType)
-                );
-
-                if (!showPathInput) {
-                    return (
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                setShowPathInput(true);
-                                // Set default pathMatchType when first showing path input
-                                if (!row.original.pathMatchType) {
-                                    updateTarget(row.original.targetId, {
-                                        ...row.original,
-                                        pathMatchType: "prefix"
-                                    });
-                                }
-                            }}
-                        >
-                           + {t("matchPath")}
-                        </Button>
-                    );
-                }
-
                 return (
-                    <div className="flex gap-2 min-w-[200px] items-center">
-                        <Select
-                            defaultValue={row.original.pathMatchType || "prefix"}
-                            onValueChange={(value) =>
-                                updateTarget(row.original.targetId, {
-                                    ...row.original,
-                                    pathMatchType: value as "exact" | "prefix" | "regex"
-                                })
-                            }
-                        >
-                            <SelectTrigger className="w-25">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="prefix">Prefix</SelectItem>
-                                <SelectItem value="exact">Exact</SelectItem>
-                                <SelectItem value="regex">Regex</SelectItem>
-                            </SelectContent>
-                        </Select>
+                    <div className="flex items-center gap-2">
                         <Input
-                            placeholder={
-                                row.original.pathMatchType === "regex"
-                                    ? "^/api/.*"
-                                    : "/path"
-                            }
-                            defaultValue={row.original.path || ""}
-                            className="flex-1 min-w-[150px]"
+                            type="number"
+                            min="1"
+                            max="1000"
+                            defaultValue={row.original.priority || 100}
+                            className="w-20"
                             onBlur={(e) => {
-                                const value = e.target.value.trim();
-                                if (!value) {
-                                    setShowPathInput(false);
+                                const value = parseInt(e.target.value, 10);
+                                if (value >= 1 && value <= 1000) {
                                     updateTarget(row.original.targetId, {
                                         ...row.original,
-                                        path: null,
-                                        pathMatchType: null
-                                    });
-                                } else {
-                                    updateTarget(row.original.targetId, {
-                                        ...row.original,
-                                        path: value
+                                        priority: value
                                     });
                                 }
                             }}
                         />
+                    </div>
+                );
+            }
+        },
+        {
+            accessorKey: "path",
+            header: t("matchPath"),
+            cell: ({ row }) => {
+                const hasPathMatch = !!(
+                    row.original.path || row.original.pathMatchType
+                );
+
+                return hasPathMatch ? (
+                    <div className="flex items-center gap-1">
+                        <PathMatchModal
+                            value={{
+                                path: row.original.path,
+                                pathMatchType: row.original.pathMatchType
+                            }}
+                            onChange={(config) =>
+                                updateTarget(row.original.targetId, config)
+                            }
+                            trigger={
+                                <Button
+                                    variant="outline"
+                                    className="flex items-center gap-2 p-2 max-w-md w-full text-left cursor-pointer"
+                                >
+                                    <PathMatchDisplay
+                                        value={{
+                                            path: row.original.path,
+                                            pathMatchType:
+                                                row.original.pathMatchType
+                                        }}
+                                    />
+                                </Button>
+                            }
+                        />
                         <Button
-                            variant="outline"
-                            onClick={() => {
-                                setShowPathInput(false);
+                            variant="text"
+                            size="sm"
+                            className="px-1"
+                            onClick={(e) => {
+                                e.stopPropagation();
                                 updateTarget(row.original.targetId, {
                                     ...row.original,
                                     path: null,
-                                    pathMatchType: null
+                                    pathMatchType: null,
+                                    rewritePath: null,
+                                    rewritePathType: null
                                 });
                             }}
                         >
                             ×
                         </Button>
 
-                        <MoveRight className="ml-4 h-4 w-4" />
+                        {/* <MoveRight className="ml-1 h-4 w-4" /> */}
                     </div>
+                ) : (
+                    <PathMatchModal
+                        value={{
+                            path: row.original.path,
+                            pathMatchType: row.original.pathMatchType
+                        }}
+                        onChange={(config) =>
+                            updateTarget(row.original.targetId, config)
+                        }
+                        trigger={
+                            <Button variant="outline">
+                                <Plus className="h-4 w-4 mr-2" />
+                                {t("matchPath")}
+                            </Button>
+                        }
+                    />
                 );
             }
         },
@@ -856,6 +978,81 @@ export default function ReverseProxyTargets(props: {
                 />
             )
         },
+        {
+            accessorKey: "rewritePath",
+            header: t("rewritePath"),
+            cell: ({ row }) => {
+                const hasRewritePath = !!(
+                    row.original.rewritePath || row.original.rewritePathType
+                );
+                const noPathMatch =
+                    !row.original.path && !row.original.pathMatchType;
+
+                return hasRewritePath && !noPathMatch ? (
+                    <div className="flex items-center gap-1">
+                        {/* <MoveRight className="mr-2 h-4 w-4" /> */}
+                        <PathRewriteModal
+                            value={{
+                                rewritePath: row.original.rewritePath,
+                                rewritePathType: row.original.rewritePathType
+                            }}
+                            onChange={(config) =>
+                                updateTarget(row.original.targetId, config)
+                            }
+                            trigger={
+                                <Button
+                                    variant="outline"
+                                    className="flex items-center gap-2 p-2 max-w-md w-full text-left cursor-pointer"
+                                    disabled={noPathMatch}
+                                >
+                                    <PathRewriteDisplay
+                                        value={{
+                                            rewritePath:
+                                                row.original.rewritePath,
+                                            rewritePathType:
+                                                row.original.rewritePathType
+                                        }}
+                                    />
+                                </Button>
+                            }
+                        />
+                        <Button
+                            size="sm"
+                            variant="text"
+                            className="px-1"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                updateTarget(row.original.targetId, {
+                                    ...row.original,
+                                    rewritePath: null,
+                                    rewritePathType: null
+                                });
+                            }}
+                        >
+                            ×
+                        </Button>
+                    </div>
+                ) : (
+                    <PathRewriteModal
+                        value={{
+                            rewritePath: row.original.rewritePath,
+                            rewritePathType: row.original.rewritePathType
+                        }}
+                        onChange={(config) =>
+                            updateTarget(row.original.targetId, config)
+                        }
+                        trigger={
+                            <Button variant="outline" disabled={noPathMatch}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                {t("rewritePath")}
+                            </Button>
+                        }
+                        disabled={noPathMatch}
+                    />
+                );
+            }
+        },
+
         // {
         //     accessorKey: "protocol",
         //     header: t('targetProtocol'),
@@ -874,6 +1071,79 @@ export default function ReverseProxyTargets(props: {
         //         </Select>
         //     ),
         //         },
+        {
+            accessorKey: "healthCheck",
+            header: t("healthCheck"),
+            cell: ({ row }) => {
+                const status = row.original.hcHealth || "unknown";
+                const isEnabled = row.original.hcEnabled;
+
+                const getStatusColor = (status: string) => {
+                    switch (status) {
+                        case "healthy":
+                            return "green";
+                        case "unhealthy":
+                            return "red";
+                        case "unknown":
+                        default:
+                            return "secondary";
+                    }
+                };
+
+                const getStatusText = (status: string) => {
+                    switch (status) {
+                        case "healthy":
+                            return t("healthCheckHealthy");
+                        case "unhealthy":
+                            return t("healthCheckUnhealthy");
+                        case "unknown":
+                        default:
+                            return t("healthCheckUnknown");
+                    }
+                };
+
+                const getStatusIcon = (status: string) => {
+                    switch (status) {
+                        case "healthy":
+                            return <CircleCheck className="w-3 h-3" />;
+                        case "unhealthy":
+                            return <CircleX className="w-3 h-3" />;
+                        case "unknown":
+                        default:
+                            return null;
+                    }
+                };
+
+                return (
+                    <>
+                        {row.original.siteType === "newt" ? (
+                            <div className="flex items-center space-x-1">
+                                <Badge variant={getStatusColor(status)}>
+                                    <div className="flex items-center gap-1">
+                                        {getStatusIcon(status)}
+                                        {getStatusText(status)}
+                                    </div>
+                                </Badge>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                        openHealthCheckDialog(row.original)
+                                    }
+                                    className="h-6 w-6 p-0"
+                                >
+                                    <Settings className="h-3 w-3" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <span className="text-sm text-muted-foreground">
+                                {t("healthCheckNotAvailable")}
+                            </span>
+                        )}
+                    </>
+                );
+            }
+        },
         {
             accessorKey: "enabled",
             header: t("enabled"),
@@ -1478,9 +1748,7 @@ export default function ReverseProxyTargets(props: {
                                                 </FormLabel>
                                                 <FormControl>
                                                     <HeadersInput
-                                                        value={
-                                                            field.value
-                                                        }
+                                                        value={field.value}
                                                         onChange={(value) => {
                                                             field.onChange(
                                                                 value
@@ -1489,6 +1757,11 @@ export default function ReverseProxyTargets(props: {
                                                         rows={4}
                                                     />
                                                 </FormControl>
+                                                <FormDescription>
+                                                    {t(
+                                                        "customHeadersDescription"
+                                                    )}
+                                                </FormDescription>
                                                 <FormMessage />
                                             </FormItem>
                                         )}
@@ -1517,12 +1790,61 @@ export default function ReverseProxyTargets(props: {
                     {t("saveSettings")}
                 </Button>
             </div>
+
+            {selectedTargetForHealthCheck && (
+                <HealthCheckDialog
+                    open={healthCheckDialogOpen}
+                    setOpen={setHealthCheckDialogOpen}
+                    targetId={selectedTargetForHealthCheck.targetId}
+                    targetAddress={`${selectedTargetForHealthCheck.ip}:${selectedTargetForHealthCheck.port}`}
+                    targetMethod={
+                        selectedTargetForHealthCheck.method || undefined
+                    }
+                    initialConfig={{
+                        hcEnabled:
+                            selectedTargetForHealthCheck.hcEnabled || false,
+                        hcPath: selectedTargetForHealthCheck.hcPath || "/",
+                        hcMethod:
+                            selectedTargetForHealthCheck.hcMethod || "GET",
+                        hcInterval:
+                            selectedTargetForHealthCheck.hcInterval || 5,
+                        hcTimeout: selectedTargetForHealthCheck.hcTimeout || 5,
+                        hcHeaders:
+                            selectedTargetForHealthCheck.hcHeaders || undefined,
+                        hcScheme:
+                            selectedTargetForHealthCheck.hcScheme || undefined,
+                        hcHostname:
+                            selectedTargetForHealthCheck.hcHostname ||
+                            selectedTargetForHealthCheck.ip,
+                        hcPort:
+                            selectedTargetForHealthCheck.hcPort ||
+                            selectedTargetForHealthCheck.port,
+                        hcFollowRedirects:
+                            selectedTargetForHealthCheck.hcFollowRedirects ||
+                            true,
+                        hcStatus:
+                            selectedTargetForHealthCheck.hcStatus || undefined,
+                        hcMode: selectedTargetForHealthCheck.hcMode || "http",
+                        hcUnhealthyInterval:
+                            selectedTargetForHealthCheck.hcUnhealthyInterval ||
+                            30
+                    }}
+                    onChanges={async (config) => {
+                        if (selectedTargetForHealthCheck) {
+                            console.log(config);
+                            updateTargetHealthCheck(
+                                selectedTargetForHealthCheck.targetId,
+                                config
+                            );
+                        }
+                    }}
+                />
+            )}
         </SettingsContainer>
     );
 }
 
 function isIPInSubnet(subnet: string, ip: string): boolean {
-    // Split subnet into IP and mask parts
     const [subnetIP, maskBits] = subnet.split("/");
     const mask = parseInt(maskBits);
 

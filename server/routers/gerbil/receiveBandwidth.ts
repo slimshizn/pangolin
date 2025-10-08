@@ -6,7 +6,10 @@ import logger from "@server/logger";
 import createHttpError from "http-errors";
 import HttpCode from "@server/types/HttpCode";
 import response from "@server/lib/response";
+import { usageService } from "@server/lib/private/billing/usageService";
+import { FeatureId } from "@server/lib/private/billing/features";
 import { checkExitNodeOrg } from "@server/lib/exitNodes";
+import { build } from "@server/build";
 
 // Track sites that are already offline to avoid unnecessary queries
 const offlineSites = new Set<string>();
@@ -29,7 +32,7 @@ export const receiveBandwidth = async (
             throw new Error("Invalid bandwidth data");
         }
 
-        await updateSiteBandwidth(bandwidthData);
+        await updateSiteBandwidth(bandwidthData, build == "saas"); // we are checking the usage on saas only
 
         return response(res, {
             data: {},
@@ -51,6 +54,7 @@ export const receiveBandwidth = async (
 
 export async function updateSiteBandwidth(
     bandwidthData: PeerBandwidth[],
+    calcUsageAndLimits: boolean,
     exitNodeId?: number
 ) {
     const currentTime = new Date();
@@ -89,18 +93,23 @@ export async function updateSiteBandwidth(
                         lastBandwidthUpdate: sites.lastBandwidthUpdate
                     });
 
-                if (exitNodeId) {
-                    if (await checkExitNodeOrg(exitNodeId, updatedSite.orgId)) {
-                        // not allowed
-                        logger.warn(
-                            `Exit node ${exitNodeId} is not allowed for org ${updatedSite.orgId}`
-                        );
-                        // THIS SHOULD TRIGGER THE TRANSACTION TO FAIL?
-                        throw new Error("Exit node not allowed");
-                    }
-                }
-
                 if (updatedSite) {
+                    if (exitNodeId) {
+                        if (
+                            await checkExitNodeOrg(
+                                exitNodeId,
+                                updatedSite.orgId
+                            )
+                        ) {
+                            // not allowed
+                            logger.warn(
+                                `Exit node ${exitNodeId} is not allowed for org ${updatedSite.orgId}`
+                            );
+                            // THIS SHOULD TRIGGER THE TRANSACTION TO FAIL?
+                            throw new Error("Exit node not allowed");
+                        }
+                    }
+
                     updatedSites.push({ ...updatedSite, peer });
                 }
             }
@@ -115,6 +124,74 @@ export async function updateSiteBandwidth(
                 // Add 10 seconds of uptime for each active site
                 const currentOrgUptime = orgUptimeMap.get(site.orgId) || 0;
                 orgUptimeMap.set(site.orgId, currentOrgUptime + 10 / 60); // Store in minutes and jut add 10 seconds
+            }
+
+            if (calcUsageAndLimits) {
+                // REMOTE EXIT NODES DO NOT COUNT TOWARDS USAGE
+                // Process all usage updates sequentially by organization to reduce deadlock risk
+                const allOrgIds = new Set([...orgUsageMap.keys(), ...orgUptimeMap.keys()]);
+                
+                for (const orgId of allOrgIds) {
+                    try {
+                        // Process bandwidth usage for this org
+                        const totalBandwidth = orgUsageMap.get(orgId);
+                        if (totalBandwidth) {
+                            const bandwidthUsage = await usageService.add(
+                                orgId,
+                                FeatureId.EGRESS_DATA_MB,
+                                totalBandwidth,
+                                trx
+                            );
+                            if (bandwidthUsage) {
+                                usageService
+                                    .checkLimitSet(
+                                        orgId,
+                                        true,
+                                        FeatureId.EGRESS_DATA_MB,
+                                        bandwidthUsage
+                                    )
+                                    .catch((error: any) => {
+                                        logger.error(
+                                            `Error checking bandwidth limits for org ${orgId}:`,
+                                            error
+                                        );
+                                    });
+                            }
+                        }
+
+                        // Process uptime usage for this org
+                        const totalUptime = orgUptimeMap.get(orgId);
+                        if (totalUptime) {
+                            const uptimeUsage = await usageService.add(
+                                orgId,
+                                FeatureId.SITE_UPTIME,
+                                totalUptime,
+                                trx
+                            );
+                            if (uptimeUsage) {
+                                usageService
+                                    .checkLimitSet(
+                                        orgId,
+                                        true,
+                                        FeatureId.SITE_UPTIME,
+                                        uptimeUsage
+                                    )
+                                    .catch((error: any) => {
+                                        logger.error(
+                                            `Error checking uptime limits for org ${orgId}:`,
+                                            error
+                                        );
+                                    });
+                            }
+                        }
+                    } catch (error) {
+                        logger.error(
+                            `Error processing usage for org ${orgId}:`,
+                            error
+                        );
+                        // Don't break the loop, continue with other orgs
+                    }
+                }
             }
         }
 
@@ -161,7 +238,7 @@ export async function updateSiteBandwidth(
                         .where(eq(sites.siteId, site.siteId))
                         .returning();
 
-                    if (exitNodeId) {
+                    if (updatedSite && exitNodeId) {
                         if (
                             await checkExitNodeOrg(
                                 exitNodeId,

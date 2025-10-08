@@ -1,1 +1,1 @@
-export * from "./getTraefikConfig";
+export * from "./traefikConfigProvider";

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { db } from "@server/db";
+import { db, loginPage } from "@server/db";
 import {
     domains,
     orgDomains,
@@ -21,6 +21,7 @@ import { subdomainSchema } from "@server/lib/schemas";
 import config from "@server/lib/config";
 import { OpenAPITags, registry } from "@server/openApi";
 import { build } from "@server/build";
+import { createCertificate } from "../private/certificates/createCertificate";
 import { getUniqueResourceName } from "@server/db/names";
 import { validateAndConstructDomain } from "@server/lib/domainUtils";
 
@@ -54,7 +55,7 @@ const createRawResourceSchema = z
         name: z.string().min(1).max(255),
         http: z.boolean(),
         protocol: z.enum(["tcp", "udp"]),
-        proxyPort: z.number().int().min(1).max(65535),
+        proxyPort: z.number().int().min(1).max(65535)
         // enableProxy: z.boolean().default(true) // always true now
     })
     .strict()
@@ -142,10 +143,7 @@ export async function createResource(
         const { http } = req.body;
 
         if (http) {
-            return await createHttpResource(
-                { req, res, next },
-                { orgId }
-            );
+            return await createHttpResource({ req, res, next }, { orgId });
         } else {
             if (
                 !config.getRawConfig().flags?.allow_raw_resources &&
@@ -158,10 +156,7 @@ export async function createResource(
                     )
                 );
             }
-            return await createRawResource(
-                { req, res, next },
-                { orgId }
-            );
+            return await createRawResource({ req, res, next }, { orgId });
         }
     } catch (error) {
         logger.error(error);
@@ -198,15 +193,14 @@ async function createHttpResource(
     const subdomain = parsedBody.data.subdomain;
 
     // Validate domain and construct full domain
-    const domainResult = await validateAndConstructDomain(domainId, orgId, subdomain);
-    
+    const domainResult = await validateAndConstructDomain(
+        domainId,
+        orgId,
+        subdomain
+    );
+
     if (!domainResult.success) {
-        return next(
-            createHttpError(
-                HttpCode.BAD_REQUEST,
-                domainResult.error
-            )
-        );
+        return next(createHttpError(HttpCode.BAD_REQUEST, domainResult.error));
     }
 
     const { fullDomain, subdomain: finalSubdomain } = domainResult;
@@ -226,6 +220,22 @@ async function createHttpResource(
                 "Resource with that domain already exists"
             )
         );
+    }
+
+    if (build != "oss") {
+        const existingLoginPages = await db
+            .select()
+            .from(loginPage)
+            .where(eq(loginPage.fullDomain, fullDomain));
+
+        if (existingLoginPages.length > 0) {
+            return next(
+                createHttpError(
+                    HttpCode.CONFLICT,
+                    "Login page with that domain already exists"
+                )
+            );
+        }
     }
 
     let resource: Resource | undefined;
@@ -285,6 +295,10 @@ async function createHttpResource(
         );
     }
 
+    if (build != "oss") {
+        await createCertificate(domainId, fullDomain, db);
+    }
+
     return response<CreateResourceResponse>(res, {
         data: resource,
         success: true,
@@ -332,7 +346,7 @@ async function createRawResource(
                 name,
                 http,
                 protocol,
-                proxyPort,
+                proxyPort
                 // enableProxy
             })
             .returning();

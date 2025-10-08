@@ -30,7 +30,7 @@ export const configSchema = z
                     anonymous_usage: z.boolean().optional().default(true)
                 })
                 .optional()
-                .default({})
+                .default({}),
         }).optional().default({
             log_level: "info",
             save_logs: false,
@@ -64,7 +64,7 @@ export const configSchema = z
         server: z.object({
             integration_port: portSchema
                 .optional()
-                .default(3004)
+                .default(3003)
                 .transform(stoi)
                 .pipe(portSchema.optional()),
             external_port: portSchema
@@ -130,7 +130,8 @@ export const configSchema = z
             secret: z
                 .string()
                 .pipe(z.string().min(8))
-                .optional()
+                .optional(),
+            maxmind_db_path: z.string().optional()
         }).optional().default({
             integration_port: 3003,
             external_port: 3000,
@@ -150,14 +151,28 @@ export const configSchema = z
         }),
         postgres: z
             .object({
-                connection_string: z.string(),
+                connection_string: z.string().optional(),
                 replicas: z
                     .array(
                         z.object({
                             connection_string: z.string()
                         })
                     )
+                    .optional(),
+                pool: z
+                    .object({
+                        max_connections: z.number().positive().optional().default(20),
+                        max_replica_connections: z.number().positive().optional().default(10),
+                        idle_timeout_ms: z.number().positive().optional().default(30000),
+                        connection_timeout_ms: z.number().positive().optional().default(5000)
+                    })
                     .optional()
+                    .default({
+                        max_connections: 20,
+                        max_replica_connections: 10,
+                        idle_timeout_ms: 30000,
+                        connection_timeout_ms: 5000
+                    })
             })
             .optional(),
         traefik: z

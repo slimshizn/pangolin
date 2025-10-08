@@ -52,6 +52,8 @@ export default async function SitesPage(props: SitesPageProps) {
             online: site.online,
             newtVersion: site.newtVersion || undefined,
             newtUpdateAvailable: site.newtUpdateAvailable || false,
+            exitNodeName: site.exitNodeName || undefined,
+            exitNodeEndpoint: site.exitNodeEndpoint || undefined,
         };
     });
 

@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import HttpCode from "@server/types/HttpCode";
 import createHttpError from "http-errors";
 import logger from "@server/logger";
-import { response as sendResponse } from "@server/lib";
+import { response as sendResponse } from "@server/lib/response";
 import { z } from "zod";
 import { fromError } from "zod-validation-error";
 import { db } from "@server/db";

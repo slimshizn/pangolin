@@ -1,4 +1,4 @@
-import { db, sites } from "@server/db";
+import { db, sites, targetHealthCheck } from "@server/db";
 import { targets } from "@server/db";
 import HttpCode from "@server/types/HttpCode";
 import response from "@server/lib/response";
@@ -45,18 +45,43 @@ function queryTargets(resourceId: number) {
             resourceId: targets.resourceId,
             siteId: targets.siteId,
             siteType: sites.type,
+            hcEnabled: targetHealthCheck.hcEnabled,
+            hcPath: targetHealthCheck.hcPath,
+            hcScheme: targetHealthCheck.hcScheme,
+            hcMode: targetHealthCheck.hcMode,
+            hcHostname: targetHealthCheck.hcHostname,
+            hcPort: targetHealthCheck.hcPort,
+            hcInterval: targetHealthCheck.hcInterval,
+            hcUnhealthyInterval: targetHealthCheck.hcUnhealthyInterval,
+            hcTimeout: targetHealthCheck.hcTimeout,
+            hcHeaders: targetHealthCheck.hcHeaders,
+            hcFollowRedirects: targetHealthCheck.hcFollowRedirects,
+            hcMethod: targetHealthCheck.hcMethod,
+            hcStatus: targetHealthCheck.hcStatus,
+            hcHealth: targetHealthCheck.hcHealth,
             path: targets.path,
-            pathMatchType: targets.pathMatchType
+            pathMatchType: targets.pathMatchType,
+            rewritePath: targets.rewritePath,
+            rewritePathType: targets.rewritePathType,
+            priority: targets.priority,
         })
         .from(targets)
         .leftJoin(sites, eq(sites.siteId, targets.siteId))
+        .leftJoin(
+            targetHealthCheck,
+            eq(targetHealthCheck.targetId, targets.targetId)
+        )
         .where(eq(targets.resourceId, resourceId));
 
     return baseQuery;
 }
 
+type TargetWithParsedHeaders = Omit<Awaited<ReturnType<typeof queryTargets>>[0], 'hcHeaders'> & {
+    hcHeaders: { name: string; value: string; }[] | null;
+};
+
 export type ListTargetsResponse = {
-    targets: Awaited<ReturnType<typeof queryTargets>>;
+    targets: TargetWithParsedHeaders[];
     pagination: { total: number; limit: number; offset: number };
 };
 
@@ -111,9 +136,26 @@ export async function listTargets(
         const totalCountResult = await countQuery;
         const totalCount = totalCountResult[0].count;
 
+        // Parse hcHeaders from JSON string back to array for each target
+        const parsedTargetsList = targetsList.map(target => {
+            let parsedHcHeaders = null;
+            if (target.hcHeaders) {
+                try {
+                    parsedHcHeaders = JSON.parse(target.hcHeaders);
+                } catch (error) {
+                    // If parsing fails, keep as string for backward compatibility
+                    parsedHcHeaders = target.hcHeaders;
+                }
+            }
+            return {
+                ...target,
+                hcHeaders: parsedHcHeaders
+            };
+        });
+
         return response<ListTargetsResponse>(res, {
             data: {
-                targets: targetsList,
+                targets: parsedTargetsList,
                 pagination: {
                     total: totalCount,
                     limit,

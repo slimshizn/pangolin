@@ -6,9 +6,16 @@ import { eq } from "drizzle-orm";
 import { license } from "@server/license/license";
 import { configSchema, readConfigFile } from "./readConfigFile";
 import { fromError } from "zod-validation-error";
+import {
+    privateConfigSchema,
+    readPrivateConfigFile
+} from "@server/lib/private/readConfigFile";
+import logger from "@server/logger";
+import { build } from "@server/build";
 
 export class Config {
     private rawConfig!: z.infer<typeof configSchema>;
+    private rawPrivateConfig!: z.infer<typeof privateConfigSchema>;
 
     supporterData: SupporterKey | null = null;
 
@@ -28,6 +35,19 @@ export class Config {
         if (!success) {
             const errors = fromError(error);
             throw new Error(`Invalid configuration file: ${errors}`);
+        }
+
+        const privateEnvironment = readPrivateConfigFile();
+
+        const {
+            data: parsedPrivateConfig,
+            success: privateSuccess,
+            error: privateError
+        } = privateConfigSchema.safeParse(privateEnvironment);
+
+        if (!privateSuccess) {
+            const errors = fromError(privateError);
+            throw new Error(`Invalid private configuration file: ${errors}`);
         }
 
         if (
@@ -89,7 +109,110 @@ export class Config {
             ? "true"
             : "false";
 
+        if (parsedPrivateConfig.branding?.colors) {
+            process.env.BRANDING_COLORS = JSON.stringify(
+                parsedPrivateConfig.branding?.colors
+            );
+        }
+
+        if (parsedPrivateConfig.branding?.logo?.light_path) {
+            process.env.BRANDING_LOGO_LIGHT_PATH =
+                parsedPrivateConfig.branding?.logo?.light_path;
+        }
+        if (parsedPrivateConfig.branding?.logo?.dark_path) {
+            process.env.BRANDING_LOGO_DARK_PATH =
+                parsedPrivateConfig.branding?.logo?.dark_path || undefined;
+        }
+
+        process.env.HIDE_SUPPORTER_KEY = parsedPrivateConfig.flags
+            ?.hide_supporter_key
+            ? "true"
+            : "false";
+
+        if (build != "oss") {
+            if (parsedPrivateConfig.branding?.logo?.light_path) {
+                process.env.BRANDING_LOGO_LIGHT_PATH =
+                    parsedPrivateConfig.branding?.logo?.light_path;
+            }
+            if (parsedPrivateConfig.branding?.logo?.dark_path) {
+                process.env.BRANDING_LOGO_DARK_PATH =
+                    parsedPrivateConfig.branding?.logo?.dark_path || undefined;
+            }
+
+            process.env.BRANDING_LOGO_AUTH_WIDTH = parsedPrivateConfig.branding
+                ?.logo?.auth_page?.width
+                ? parsedPrivateConfig.branding?.logo?.auth_page?.width.toString()
+                : undefined;
+            process.env.BRANDING_LOGO_AUTH_HEIGHT = parsedPrivateConfig.branding
+                ?.logo?.auth_page?.height
+                ? parsedPrivateConfig.branding?.logo?.auth_page?.height.toString()
+                : undefined;
+
+            process.env.BRANDING_LOGO_NAVBAR_WIDTH = parsedPrivateConfig
+                .branding?.logo?.navbar?.width
+                ? parsedPrivateConfig.branding?.logo?.navbar?.width.toString()
+                : undefined;
+            process.env.BRANDING_LOGO_NAVBAR_HEIGHT = parsedPrivateConfig
+                .branding?.logo?.navbar?.height
+                ? parsedPrivateConfig.branding?.logo?.navbar?.height.toString()
+                : undefined;
+
+            process.env.BRANDING_FAVICON_PATH =
+                parsedPrivateConfig.branding?.favicon_path;
+
+            process.env.BRANDING_APP_NAME =
+                parsedPrivateConfig.branding?.app_name || "Pangolin";
+
+            if (parsedPrivateConfig.branding?.footer) {
+                process.env.BRANDING_FOOTER = JSON.stringify(
+                    parsedPrivateConfig.branding?.footer
+                );
+            }
+
+            process.env.LOGIN_PAGE_TITLE_TEXT =
+                parsedPrivateConfig.branding?.login_page?.title_text || "";
+            process.env.LOGIN_PAGE_SUBTITLE_TEXT =
+                parsedPrivateConfig.branding?.login_page?.subtitle_text || "";
+
+            process.env.SIGNUP_PAGE_TITLE_TEXT =
+                parsedPrivateConfig.branding?.signup_page?.title_text || "";
+            process.env.SIGNUP_PAGE_SUBTITLE_TEXT =
+                parsedPrivateConfig.branding?.signup_page?.subtitle_text || "";
+
+            process.env.RESOURCE_AUTH_PAGE_HIDE_POWERED_BY =
+                parsedPrivateConfig.branding?.resource_auth_page
+                    ?.hide_powered_by === true
+                    ? "true"
+                    : "false";
+            process.env.RESOURCE_AUTH_PAGE_SHOW_LOGO =
+                parsedPrivateConfig.branding?.resource_auth_page?.show_logo ===
+                true
+                    ? "true"
+                    : "false";
+            process.env.RESOURCE_AUTH_PAGE_TITLE_TEXT =
+                parsedPrivateConfig.branding?.resource_auth_page?.title_text ||
+                "";
+            process.env.RESOURCE_AUTH_PAGE_SUBTITLE_TEXT =
+                parsedPrivateConfig.branding?.resource_auth_page
+                    ?.subtitle_text || "";
+
+            if (parsedPrivateConfig.branding?.background_image_path) {
+                process.env.BACKGROUND_IMAGE_PATH =
+                    parsedPrivateConfig.branding?.background_image_path;
+            }
+
+            if (parsedPrivateConfig.server.reo_client_id) {
+                process.env.REO_CLIENT_ID =
+                    parsedPrivateConfig.server.reo_client_id;
+            }
+        }
+
+        if (parsedConfig.server.maxmind_db_path) {
+            process.env.MAXMIND_DB_PATH = parsedConfig.server.maxmind_db_path;
+        }
+
         this.rawConfig = parsedConfig;
+        this.rawPrivateConfig = parsedPrivateConfig;
     }
 
     public async initServer() {
@@ -107,13 +230,21 @@ export class Config {
 
     private async checkKeyStatus() {
         const licenseStatus = await license.check();
-        if (!licenseStatus.isHostLicensed) {
+        if (
+            !this.rawPrivateConfig.flags?.hide_supporter_key &&
+            build != "oss" &&
+            !licenseStatus.isHostLicensed
+        ) {
             this.checkSupporterKey();
         }
     }
 
     public getRawConfig() {
         return this.rawConfig;
+    }
+
+    public getRawPrivateConfig() {
+        return this.rawPrivateConfig;
     }
 
     public getNoReplyEmail(): string | undefined {

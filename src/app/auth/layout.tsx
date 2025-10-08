@@ -12,7 +12,7 @@ import { cache } from "react";
 import { getTranslations } from "next-intl/server";
 
 export const metadata: Metadata = {
-    title: `Auth - Pangolin`,
+    title: `Auth - ${process.env.BRANDING_APP_NAME || "Pangolin"}`,
     description: ""
 };
 

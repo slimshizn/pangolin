@@ -13,8 +13,8 @@ export async function getValidCertificatesForDomainsHybrid(domains: Set<string>)
         wildcard: boolean | null;
         certFile: string | null;
         keyFile: string | null;
-        expiresAt: Date | null;
-        updatedAt?: Date | null;
+        expiresAt: number | null;
+        updatedAt?: number | null;
     }>
 > {
     if (domains.size === 0) {
@@ -72,8 +72,8 @@ export async function getValidCertificatesForDomains(domains: Set<string>): Prom
         wildcard: boolean | null;
         certFile: string | null;
         keyFile: string | null;
-        expiresAt: Date | null;
-        updatedAt?: Date | null;
+        expiresAt: number | null;
+        updatedAt?: number | null;
     }>
 > {
     return []; // stub

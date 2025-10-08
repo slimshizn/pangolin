@@ -17,7 +17,7 @@ const getOrgSchema = z
     .strict();
 
 export type GetOrgResponse = {
-    org: Org;
+    org: Org & { settings: { } | null };
 };
 
 registry.registerPath({
@@ -64,9 +64,27 @@ export async function getOrg(
             );
         }
 
+        // Parse settings from JSON string back to object
+        let parsedSettings = null;
+        if (org[0].settings) {
+            try {
+                parsedSettings = JSON.parse(org[0].settings);
+            } catch (error) {
+                // If parsing fails, keep as string for backward compatibility
+                parsedSettings = org[0].settings;
+            }
+        }
+
+        logger.info(
+            `returning data: ${JSON.stringify({ ...org[0], settings: parsedSettings })}`
+        );
+
         return response<GetOrgResponse>(res, {
             data: {
-                org: org[0]
+                org: {
+                    ...org[0],
+                    settings: parsedSettings
+                }
             },
             success: true,
             error: false,

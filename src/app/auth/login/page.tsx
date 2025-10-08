@@ -12,6 +12,7 @@ import { priv } from "@app/lib/api";
 import { AxiosResponse } from "axios";
 import { ListIdpsResponse } from "@server/routers/idp";
 import { getTranslations } from "next-intl/server";
+import { build } from "@server/build";
 
 export const dynamic = "force-dynamic";
 
@@ -37,14 +38,17 @@ export default async function Page(props: {
         redirectUrl = cleanRedirect(searchParams.redirect as string);
     }
 
-    const idpsRes = await cache(
-        async () => await priv.get<AxiosResponse<ListIdpsResponse>>("/idp")
-    )();
-    const loginIdps = idpsRes.data.data.idps.map((idp) => ({
-        idpId: idp.idpId,
-        name: idp.name,
-        variant: idp.variant
-    })) as LoginFormIDP[];
+    let loginIdps: LoginFormIDP[] = [];
+    if (build !== "saas") {
+        const idpsRes = await cache(
+            async () => await priv.get<AxiosResponse<ListIdpsResponse>>("/idp")
+        )();
+        loginIdps = idpsRes.data.data.idps.map((idp) => ({
+            idpId: idp.idpId,
+            name: idp.name,
+            variant: idp.type
+        })) as LoginFormIDP[];
+    }
 
     const t = await getTranslations();
 

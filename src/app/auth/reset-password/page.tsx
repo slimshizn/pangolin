@@ -5,6 +5,8 @@ import ResetPasswordForm from "@app/components/ResetPasswordForm";
 import Link from "next/link";
 import { cleanRedirect } from "@app/lib/cleanRedirect";
 import { getTranslations } from "next-intl/server";
+import { internal } from "@app/lib/api";
+import { authCookieHeader } from "@app/lib/api/cookies";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +24,19 @@ export default async function Page(props: {
     const t = await getTranslations();
 
     if (user) {
-        redirect("/");
+        let loggedOut = false;
+        try {
+            // log out the user if they are logged in
+            await internal.post(
+                "/auth/logout",
+                undefined,
+                await authCookieHeader()
+            );
+            loggedOut = true;
+        } catch (e) {}
+        if (!loggedOut) {
+            redirect("/");
+        }
     }
 
     let redirectUrl: string | undefined = undefined;
@@ -45,8 +59,8 @@ export default async function Page(props: {
                 <Link
                     href={
                         !searchParams.redirect
-                            ? `/auth/signup`
-                            : `/auth/signup?redirect=${redirectUrl}`
+                            ? `/auth/login`
+                            : `/auth/login?redirect=${redirectUrl}`
                     }
                     className="underline"
                 >

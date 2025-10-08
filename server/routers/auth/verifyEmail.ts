@@ -3,13 +3,15 @@ import createHttpError from "http-errors";
 import { z } from "zod";
 import { fromError } from "zod-validation-error";
 import HttpCode from "@server/types/HttpCode";
-import { response } from "@server/lib";
+import { response } from "@server/lib/response";
 import { db, userOrgs } from "@server/db";
 import { User, emailVerificationCodes, users } from "@server/db";
 import { eq } from "drizzle-orm";
 import { isWithinExpirationDate } from "oslo";
 import config from "@server/lib/config";
 import logger from "@server/logger";
+import { freeLimitSet, limitsService } from "@server/lib/private/billing";
+import { build } from "@server/build";
 
 export const verifyEmailBody = z
     .object({
@@ -85,6 +87,19 @@ export async function verifyEmail(
                     HttpCode.BAD_REQUEST,
                     "Invalid verification code"
                 )
+            );
+        }
+
+        if (build == "saas") {
+            const orgs = await db
+                .select()
+                .from(userOrgs)
+                .where(eq(userOrgs.userId, user.userId));
+            const orgIds = orgs.map((org) => org.orgId);
+            await Promise.all(
+                orgIds.map(async (orgId) => {
+                    await limitsService.applyLimitSetToOrg(orgId, freeLimitSet);
+                })
             );
         }
 
