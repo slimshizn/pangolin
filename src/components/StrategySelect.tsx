@@ -5,9 +5,9 @@ import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { useState, ReactNode } from "react";
 
 export interface StrategyOption<TValue extends string> {
-id: TValue;
+    id: TValue;
     title: string;
-    description: string;
+    description: string | ReactNode;
     disabled?: boolean;
     icon?: ReactNode;
 }
@@ -59,16 +59,16 @@ export function StrategySelect<TValue extends string>({
                         disabled={option.disabled}
                         className="absolute left-4 top-5 h-4 w-4 border-primary text-primary"
                     />
-                    <div className="flex items-center gap-3 pl-7">
+                    <div className="flex gap-3 pl-7">
                         {option.icon && (
-                            <div className="flex-shrink-0 flex items-center justify-center">
+                            <div className="mt-1">
                                 {option.icon}
                             </div>
                         )}
                         <div className="flex-1">
                             <div className="font-medium">{option.title}</div>
                             <div className="text-sm text-muted-foreground">
-                                {option.description}
+                                {typeof option.description === 'string' ? option.description : option.description}
                             </div>
                         </div>
                     </div>

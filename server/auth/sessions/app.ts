@@ -3,13 +3,7 @@ import {
     encodeHexLowerCase
 } from "@oslojs/encoding";
 import { sha256 } from "@oslojs/crypto/sha2";
-import {
-    resourceSessions,
-    Session,
-    sessions,
-    User,
-    users
-} from "@server/db";
+import { resourceSessions, Session, sessions, User, users } from "@server/db";
 import { db } from "@server/db";
 import { eq, inArray } from "drizzle-orm";
 import config from "@server/lib/config";
@@ -24,8 +18,9 @@ export const SESSION_COOKIE_EXPIRES =
     60 *
     60 *
     config.getRawConfig().server.dashboard_session_length_hours;
-export const COOKIE_DOMAIN = config.getRawConfig().app.dashboard_url ?
-    "." + new URL(config.getRawConfig().app.dashboard_url!).hostname : undefined;
+export const COOKIE_DOMAIN = config.getRawConfig().app.dashboard_url
+    ? new URL(config.getRawConfig().app.dashboard_url!).hostname
+    : undefined;
 
 export function generateSessionToken(): string {
     const bytes = new Uint8Array(20);
@@ -98,8 +93,8 @@ export async function invalidateSession(sessionId: string): Promise<void> {
     try {
         await db.transaction(async (trx) => {
             await trx
-            .delete(resourceSessions)
-            .where(eq(resourceSessions.userSessionId, sessionId));
+                .delete(resourceSessions)
+                .where(eq(resourceSessions.userSessionId, sessionId));
             await trx.delete(sessions).where(eq(sessions.sessionId, sessionId));
         });
     } catch (e) {
@@ -111,9 +106,9 @@ export async function invalidateAllSessions(userId: string): Promise<void> {
     try {
         await db.transaction(async (trx) => {
             const userSessions = await trx
-            .select()
-            .from(sessions)
-            .where(eq(sessions.userId, userId));
+                .select()
+                .from(sessions)
+                .where(eq(sessions.userId, userId));
             await trx.delete(resourceSessions).where(
                 inArray(
                     resourceSessions.userSessionId,

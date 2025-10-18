@@ -28,4 +28,7 @@ LICENSE
 CONTRIBUTING.md
 dist
 .git
+migrations/
 config/
+build.ts
+tsconfig.json

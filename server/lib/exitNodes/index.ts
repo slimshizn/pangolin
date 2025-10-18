@@ -1,2 +1,4 @@
 export * from "./exitNodes";
-export * from "./shared";
+export * from "./exitNodeComms";
+export * from "./subnet";
+export * from "./getCurrentExitNodeId";

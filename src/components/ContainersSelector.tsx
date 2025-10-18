@@ -81,9 +81,10 @@ export const ContainersSelector: FC<ContainerSelectorProps> = ({
         <>
             <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 onClick={() => setOpen(true)}
                 title={t("viewDockerContainers")}
+                className="border-r rounded-r-none"
             >
                 <FaDocker size={15} />
             </Button>

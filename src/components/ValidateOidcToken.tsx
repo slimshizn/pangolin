@@ -2,7 +2,6 @@
 
 import { useEnvContext } from "@app/hooks/useEnvContext";
 import { createApiClient, formatAxiosError } from "@app/lib/api";
-import { ValidateOidcUrlCallbackResponse } from "@server/routers/idp";
 import { AxiosResponse } from "axios";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -17,6 +16,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useLicenseStatusContext } from "@app/hooks/useLicenseStatusContext";
 import { useTranslations } from "next-intl";
+import { validateOidcUrlCallbackProxy } from "@app/actions/server";
 
 type ValidateOidcTokenParams = {
     orgId: string;
@@ -25,6 +25,7 @@ type ValidateOidcTokenParams = {
     expectedState: string | undefined;
     stateCookie: string | undefined;
     idp: { name: string };
+    loginPageId?: number;
 };
 
 export default function ValidateOidcToken(props: ValidateOidcTokenParams) {
@@ -43,7 +44,7 @@ export default function ValidateOidcToken(props: ValidateOidcTokenParams) {
         async function validate() {
             setLoading(true);
 
-            console.log(t('idpOidcTokenValidating'), {
+            console.log(t("idpOidcTokenValidating"), {
                 code: props.code,
                 expectedState: props.expectedState,
                 stateCookie: props.stateCookie
@@ -54,32 +55,48 @@ export default function ValidateOidcToken(props: ValidateOidcTokenParams) {
             }
 
             try {
-                const res = await api.post<
-                    AxiosResponse<ValidateOidcUrlCallbackResponse>
-                >(`/auth/idp/${props.idpId}/oidc/validate-callback`, {
-                    code: props.code,
-                    state: props.expectedState,
-                    storedState: props.stateCookie
-                });
+                const response = await validateOidcUrlCallbackProxy(
+                    props.idpId,
+                    props.code || "",
+                    props.expectedState || "",
+                    props.stateCookie || "",
+                    props.loginPageId
+                );
 
-                console.log(t('idpOidcTokenResponse'), res.data);
+                if (response.error) {
+                    setError(response.message);
+                    setLoading(false);
+                    return;
+                }
 
-                const redirectUrl = res.data.data.redirectUrl;
+                const data = response.data;
+                if (!data) {
+                    setError("Unable to validate OIDC token");
+                    setLoading(false);
+                    return;
+                }
+
+                const redirectUrl = data.redirectUrl;
 
                 if (!redirectUrl) {
-                    router.push("/");
+                    router.push(env.app.dashboardUrl);
                 }
 
                 setLoading(false);
                 await new Promise((resolve) => setTimeout(resolve, 100));
 
                 if (redirectUrl.startsWith("http")) {
-                    window.location.href = res.data.data.redirectUrl; // this is validated by the parent using this component
+                    window.location.href = data.redirectUrl; // this is validated by the parent using this component
                 } else {
-                    router.push(res.data.data.redirectUrl);
+                    router.push(data.redirectUrl);
                 }
-            } catch (e) {
-                setError(formatAxiosError(e, t('idpErrorOidcTokenValidating')));
+            } catch (e: any) {
+                console.error(e);
+                setError(
+                    t("idpErrorOidcTokenValidating", {
+                        defaultValue: "An unexpected error occurred. Please try again."
+                    })
+                );
             } finally {
                 setLoading(false);
             }
@@ -92,20 +109,24 @@ export default function ValidateOidcToken(props: ValidateOidcTokenParams) {
         <div className="flex items-center justify-center min-h-screen">
             <Card className="w-full max-w-md">
                 <CardHeader>
-                    <CardTitle>{t('idpConnectingTo', {name: props.idp.name})}</CardTitle>
-                    <CardDescription>{t('idpConnectingToDescription')}</CardDescription>
+                    <CardTitle>
+                        {t("idpConnectingTo", { name: props.idp.name })}
+                    </CardTitle>
+                    <CardDescription>
+                        {t("idpConnectingToDescription")}
+                    </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center space-y-4">
                     {loading && (
                         <div className="flex items-center space-x-2">
                             <Loader2 className="h-5 w-5 animate-spin" />
-                            <span>{t('idpConnectingToProcess')}</span>
+                            <span>{t("idpConnectingToProcess")}</span>
                         </div>
                     )}
                     {!loading && !error && (
                         <div className="flex items-center space-x-2 text-green-600">
                             <CheckCircle2 className="h-5 w-5" />
-                            <span>{t('idpConnectingToFinished')}</span>
+                            <span>{t("idpConnectingToFinished")}</span>
                         </div>
                     )}
                     {error && (
@@ -113,7 +134,9 @@ export default function ValidateOidcToken(props: ValidateOidcTokenParams) {
                             <AlertCircle className="h-5 w-5" />
                             <AlertDescription className="flex flex-col space-y-2">
                                 <span>
-                                    {t('idpErrorConnectingTo', {name: props.idp.name})}
+                                    {t("idpErrorConnectingTo", {
+                                        name: props.idp.name
+                                    })}
                                 </span>
                                 <span className="text-xs">{error}</span>
                             </AlertDescription>

@@ -1,4 +1,4 @@
-import { sendToClient } from "@server/routers/ws";
+import { sendToClient } from "#dynamic/routers/ws";
 import { processContainerLabels } from "./parseDockerContainers";
 import { applyBlueprint } from "./applyBlueprint";
 import { db, sites } from "@server/db";

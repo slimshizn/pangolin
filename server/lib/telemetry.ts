@@ -9,6 +9,7 @@ import { APP_VERSION } from "./consts";
 import crypto from "crypto";
 import { UserType } from "@server/types/UserTypes";
 import { build } from "@server/build";
+import license from "@server/license/license";
 
 class TelemetryClient {
     private client: PostHog | null = null;
@@ -176,17 +177,36 @@ class TelemetryClient {
 
         const stats = await this.getSystemStats();
 
-        this.client.capture({
-            distinctId: hostMeta.hostMetaId,
-            event: "supporter_status",
-            properties: {
-                valid: stats.supporterStatus.valid,
-                tier: stats.supporterStatus.tier,
-                github_username: stats.supporterStatus.githubUsername
-                    ? this.anon(stats.supporterStatus.githubUsername)
-                    : "None"
-            }
-        });
+        if (build === "enterprise") {
+            const licenseStatus = await license.check();
+            const payload = {
+                distinctId: hostMeta.hostMetaId,
+                event: "enterprise_status",
+                properties: {
+                    is_host_licensed: licenseStatus.isHostLicensed,
+                    is_license_valid: licenseStatus.isLicenseValid,
+                    license_tier: licenseStatus.tier || "unknown"
+                }
+            };
+            logger.debug("Sending enterprise startup telemtry payload:", {
+                payload
+            });
+            // this.client.capture(payload);
+        }
+
+        if (build === "oss") {
+            this.client.capture({
+                distinctId: hostMeta.hostMetaId,
+                event: "supporter_status",
+                properties: {
+                    valid: stats.supporterStatus.valid,
+                    tier: stats.supporterStatus.tier,
+                    github_username: stats.supporterStatus.githubUsername
+                        ? this.anon(stats.supporterStatus.githubUsername)
+                        : "None"
+                }
+            });
+        }
 
         this.client.capture({
             distinctId: hostMeta.hostMetaId,

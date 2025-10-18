@@ -1,2 +1,3 @@
 export * from "./driver";
-export * from "./schema";
+export * from "./schema/schema";
+export * from "./schema/privateSchema";

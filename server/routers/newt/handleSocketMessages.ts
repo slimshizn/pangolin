@@ -1,4 +1,4 @@
-import { MessageHandler } from "../ws";
+import { MessageHandler } from "@server/routers/ws";
 import logger from "@server/logger";
 import { dockerSocketCache } from "./dockerSocket";
 import { Newt } from "@server/db";

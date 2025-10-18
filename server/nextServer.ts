@@ -3,6 +3,7 @@ import express from "express";
 import { parse } from "url";
 import logger from "@server/logger";
 import config from "@server/lib/config";
+import { stripDuplicateSesions } from "./middlewares/stripDuplicateSessions";
 
 const nextPort = config.getRawConfig().server.next_port;
 
@@ -14,6 +15,8 @@ export async function createNextServer() {
     await app.prepare();
 
     const nextServer = express();
+
+    nextServer.use(stripDuplicateSesions);
 
     nextServer.all("/{*splat}", (req, res) => {
         const parsedUrl = parse(req.url!, true);

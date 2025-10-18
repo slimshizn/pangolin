@@ -4,7 +4,7 @@ import HttpCode from "@server/types/HttpCode";
 import createHttpError from "http-errors";
 import logger from "@server/logger";
 import { fromError } from "zod-validation-error";
-import { response as sendResponse } from "@server/lib";
+import { response as sendResponse } from "@server/lib/response";
 import { suppressDeprecationWarnings } from "moment";
 import { supporterKey } from "@server/db";
 import { db } from "@server/db";

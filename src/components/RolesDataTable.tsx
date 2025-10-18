@@ -10,12 +10,16 @@ interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
     data: TData[];
     createRole?: () => void;
+    onRefresh?: () => void;
+    isRefreshing?: boolean;
 }
 
 export function RolesDataTable<TData, TValue>({
     columns,
     data,
-    createRole
+    createRole,
+    onRefresh,
+    isRefreshing
 }: DataTableProps<TData, TValue>) {
 
     const t = useTranslations();
@@ -29,6 +33,8 @@ export function RolesDataTable<TData, TValue>({
             searchPlaceholder={t('accessRolesSearch')}
             searchColumn="name"
             onAdd={createRole}
+            onRefresh={onRefresh}
+            isRefreshing={isRefreshing}
             addButtonText={t('accessRolesAdd')}
         />
     );

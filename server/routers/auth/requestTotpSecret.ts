@@ -4,7 +4,7 @@ import { z } from "zod";
 import { fromError } from "zod-validation-error";
 import { encodeHex } from "oslo/encoding";
 import HttpCode from "@server/types/HttpCode";
-import { response } from "@server/lib";
+import { response } from "@server/lib/response";
 import { db } from "@server/db";
 import { User, users } from "@server/db";
 import { eq, and } from "drizzle-orm";
@@ -110,10 +110,12 @@ export async function requestTotpSecret(
             );
         }
 
+        const appName = process.env.BRANDING_APP_NAME || "Pangolin"; // From the private config loading into env vars to seperate away the private config
+
         const hex = crypto.getRandomValues(new Uint8Array(20));
         const secret = encodeHex(hex);
         const uri = createTOTPKeyURI(
-            "Pangolin",
+            appName,
             user.email!,
             hex
         );

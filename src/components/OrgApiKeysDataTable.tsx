@@ -8,12 +8,16 @@ interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
     data: TData[];
     addApiKey?: () => void;
+    onRefresh?: () => void;
+    isRefreshing?: boolean;
 }
 
 export function OrgApiKeysDataTable<TData, TValue>({
     addApiKey,
     columns,
-    data
+    data,
+    onRefresh,
+    isRefreshing
 }: DataTableProps<TData, TValue>) {
 
     const t = useTranslations();
@@ -27,6 +31,8 @@ export function OrgApiKeysDataTable<TData, TValue>({
             searchPlaceholder={t('searchApiKeys')}
             searchColumn="name"
             onAdd={addApiKey}
+            onRefresh={onRefresh}
+            isRefreshing={isRefreshing}
             addButtonText={t('apiKeysAdd')}
         />
     );

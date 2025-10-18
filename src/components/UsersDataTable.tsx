@@ -10,12 +10,16 @@ interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
     data: TData[];
     inviteUser?: () => void;
+    onRefresh?: () => void;
+    isRefreshing?: boolean;
 }
 
 export function UsersDataTable<TData, TValue>({
     columns,
     data,
-    inviteUser
+    inviteUser,
+    onRefresh,
+    isRefreshing
 }: DataTableProps<TData, TValue>) {
 
     const t = useTranslations();
@@ -29,6 +33,8 @@ export function UsersDataTable<TData, TValue>({
             searchPlaceholder={t('accessUsersSearch')}
             searchColumn="email"
             onAdd={inviteUser}
+            onRefresh={onRefresh}
+            isRefreshing={isRefreshing}
             addButtonText={t('accessUserCreate')}
         />
     );

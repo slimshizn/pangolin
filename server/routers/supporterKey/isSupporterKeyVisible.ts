@@ -2,12 +2,12 @@ import { Request, Response, NextFunction } from "express";
 import HttpCode from "@server/types/HttpCode";
 import createHttpError from "http-errors";
 import logger from "@server/logger";
-import { response as sendResponse } from "@server/lib";
+import { response as sendResponse } from "@server/lib/response";
 import config from "@server/lib/config";
 import { db } from "@server/db";
 import { count } from "drizzle-orm";
 import { users } from "@server/db";
-import license from "@server/license/license";
+import { build } from "@server/build";
 
 export type IsSupporterKeyVisibleResponse = {
     visible: boolean;
@@ -27,12 +27,6 @@ export async function isSupporterKeyVisible(
 
         let visible = !hidden && key?.valid !== true;
 
-        const licenseStatus = await license.check();
-
-        if (licenseStatus.isLicenseValid) {
-            visible = false;
-        }
-
         if (key?.tier === "Limited Supporter") {
             const [numUsers] = await db.select({ count: count() }).from(users);
 
@@ -42,6 +36,10 @@ export async function isSupporterKeyVisible(
                 );
                 visible = true;
             }
+        }
+
+        if (build !== "oss") {
+            visible = false;
         }
 
         return sendResponse<IsSupporterKeyVisibleResponse>(res, {

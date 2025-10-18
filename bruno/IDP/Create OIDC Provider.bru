@@ -1,0 +1,22 @@
+meta {
+  name: Create OIDC Provider
+  type: http
+  seq: 1
+}
+
+put {
+  url: http://localhost:3000/api/v1/org/home-lab/idp/oidc
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "clientId": "JJoSvHCZcxnXT2sn6CObj6a21MuKNRXs3kN5wbys",
+    "clientSecret": "2SlGL2wOGgMEWLI9yUuMAeFxre7qSNJVnXMzyepdNzH1qlxYnC4lKhhQ6a157YQEkYH3vm40KK4RCqbYiF8QIweuPGagPX3oGxEj2exwutoXFfOhtq4hHybQKoFq01Z3",
+    "authUrl": "http://localhost:9000/application/o/authorize/",
+    "tokenUrl": "http://localhost:9000/application/o/token/",
+    "scopes": ["email", "openid", "profile"],
+    "userIdentifier": "email"
+  }
+}

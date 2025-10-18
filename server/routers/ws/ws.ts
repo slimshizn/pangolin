@@ -1,7 +1,6 @@
 import { Router, Request, Response } from "express";
 import { Server as HttpServer } from "http";
 import { WebSocket, WebSocketServer } from "ws";
-import { IncomingMessage } from "http";
 import { Socket } from "net";
 import { Newt, newts, NewtSession, olms, Olm, OlmSession } from "@server/db";
 import { eq } from "drizzle-orm";
@@ -11,49 +10,14 @@ import { validateOlmSessionToken } from "@server/auth/sessions/olm";
 import { messageHandlers } from "./messageHandlers";
 import logger from "@server/logger";
 import { v4 as uuidv4 } from "uuid";
+import { ClientType, TokenPayload, WebSocketRequest, WSMessage, AuthenticatedWebSocket } from "./types";
 
-// Custom interfaces
-interface WebSocketRequest extends IncomingMessage {
-    token?: string;
-}
-
-type ClientType = 'newt' | 'olm';
-
-interface AuthenticatedWebSocket extends WebSocket {
-    client?: Newt | Olm;
-    clientType?: ClientType;
-    connectionId?: string;
-}
-
-interface TokenPayload {
+// Subset of TokenPayload for public ws.ts (newt and olm only)
+interface PublicTokenPayload {
     client: Newt | Olm;
     session: NewtSession | OlmSession;
-    clientType: ClientType;
+    clientType: "newt" | "olm";
 }
-
-interface WSMessage {
-    type: string;
-    data: any;
-}
-
-interface HandlerResponse {
-    message: WSMessage;
-    broadcast?: boolean;
-    excludeSender?: boolean;
-    targetClientId?: string;
-}
-
-interface HandlerContext {
-    message: WSMessage;
-    senderWs: WebSocket;
-    client: Newt | Olm | undefined;
-    clientType: ClientType;
-    sendToClient: (clientId: string, message: WSMessage) => Promise<boolean>;
-    broadcastToAllExcept: (message: WSMessage, excludeClientId?: string) => Promise<void>;
-    connectedClients: Map<string, WebSocket[]>;
-}
-
-export type MessageHandler = (context: HandlerContext) => Promise<HandlerResponse | void>;
 
 const router: Router = Router();
 const wss: WebSocketServer = new WebSocketServer({ noServer: true });
@@ -153,7 +117,7 @@ const getActiveNodes = async (clientType: ClientType, clientId: string): Promise
 };
 
 // Token verification middleware
-const verifyToken = async (token: string, clientType: ClientType): Promise<TokenPayload | null> => {
+const verifyToken = async (token: string, clientType: ClientType): Promise<PublicTokenPayload | null> => {
 
 try {
         if (clientType === 'newt') {
@@ -169,7 +133,7 @@ try {
                 return null;
             }
             return { client: existingNewt[0], session, clientType };
-        } else {
+        } else if (clientType === 'olm') {
             const { session, olm } = await validateOlmSessionToken(token);
             if (!session || !olm) {
                 return null;
@@ -183,13 +147,15 @@ try {
             }
             return { client: existingOlm[0], session, clientType };
         }
+        
+        return null;
     } catch (error) {
         logger.error("Token verification failed:", error);
         return null;
     }
 };
 
-const setupConnection = async (ws: AuthenticatedWebSocket, client: Newt | Olm, clientType: ClientType): Promise<void> => {
+const setupConnection = async (ws: AuthenticatedWebSocket, client: Newt | Olm, clientType: "newt" | "olm"): Promise<void> => {
     logger.info("Establishing websocket connection");
     if (!client) {
         logger.error("Connection attempt without client");
@@ -322,10 +288,6 @@ const cleanup = async (): Promise<void> => {
         logger.error('Error during WebSocket cleanup:', error);
     }
 };
-
-// Handle process termination
-process.on('SIGTERM', cleanup);
-process.on('SIGINT', cleanup);
 
 export {
     router,

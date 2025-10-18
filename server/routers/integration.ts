@@ -24,12 +24,12 @@ import {
     verifyApiKeyIsRoot,
     verifyApiKeyClientAccess,
     verifyClientsEnabled,
-    verifyApiKeySiteResourceAccess,
-    verifyOrgAccess
+    verifyApiKeySiteResourceAccess
 } from "@server/middlewares";
 import HttpCode from "@server/types/HttpCode";
 import { Router } from "express";
 import { ActionsEnum } from "@server/auth/actions";
+import { build } from "@server/build";
 
 export const unauthenticated = Router();
 
@@ -401,6 +401,13 @@ authenticated.post(
 );
 
 authenticated.post(
+    `/resource/:resourceId/header-auth`,
+    verifyApiKeyResourceAccess,
+    verifyApiKeyHasAction(ActionsEnum.setResourceHeaderAuth),
+    resource.setResourceHeaderAuth
+);
+
+authenticated.post(
     `/resource/:resourceId/whitelist`,
     verifyApiKeyResourceAccess,
     verifyApiKeyHasAction(ActionsEnum.setResourceWhitelist),
@@ -546,13 +553,6 @@ authenticated.post(
     verifyApiKeyIsRoot,
     verifyApiKeyHasAction(ActionsEnum.updateIdp),
     idp.updateOidcIdp
-);
-
-authenticated.delete(
-    "/idp/:idpId",
-    verifyApiKeyIsRoot,
-    verifyApiKeyHasAction(ActionsEnum.deleteIdp),
-    idp.deleteIdp
 );
 
 authenticated.get(

@@ -39,7 +39,25 @@ export default function IdpTable({ idps }: Props) {
     const [selectedIdp, setSelectedIdp] = useState<IdpRow | null>(null);
     const api = createApiClient(useEnvContext());
     const router = useRouter();
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const t = useTranslations();
+
+    const refreshData = async () => {
+        console.log("Data refreshed");
+        setIsRefreshing(true);
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            router.refresh();
+        } catch (error) {
+            toast({
+                title: t("error"),
+                description: t("refreshError"),
+                variant: "destructive"
+            });
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
 
     const deleteIdp = async (idpId: number) => {
         try {
@@ -194,7 +212,12 @@ export default function IdpTable({ idps }: Props) {
                 />
             )}
 
-            <IdpDataTable columns={columns} data={idps} />
+            <IdpDataTable
+                columns={columns}
+                data={idps}
+                onRefresh={refreshData}
+                isRefreshing={isRefreshing}
+            />
         </>
     );
 }

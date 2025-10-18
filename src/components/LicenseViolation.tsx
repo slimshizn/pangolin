@@ -32,29 +32,5 @@ export default function LicenseViolation() {
         );
     }
 
-    // Show usage violation banner
-    if (
-        licenseStatus.maxSites &&
-        licenseStatus.usedSites &&
-        licenseStatus.usedSites > licenseStatus.maxSites
-    ) {
-        return (
-            <div className="fixed bottom-0 left-0 right-0 w-full bg-yellow-500 text-black p-4 text-center z-50">
-                <div className="flex justify-between items-center">
-                    <p>
-                        {t('componentsLicenseViolation', {usedSites: licenseStatus.usedSites, maxSites: licenseStatus.maxSites})}
-                    </p>
-                    <Button
-                        variant={"ghost"}
-                        className="hover:bg-yellow-500"
-                        onClick={() => setIsDismissed(true)}
-                    >
-                        {t('dismiss')}
-                    </Button>
-                </div>
-            </div>
-        );
-    }
-
     return null;
 }

@@ -1,4 +1,5 @@
-import { db } from "@server/db";
+import { build } from "@server/build";
+import { db, sessionTransferToken } from "@server/db";
 import {
     emailVerificationCodes,
     newtSessions,
@@ -75,5 +76,17 @@ export async function clearStaleData() {
             .where(lt(resourceOtp.expiresAt, new Date().getTime()));
     } catch (e) {
         logger.warn("Error clearing expired resourceOtp:", e);
+    }
+
+    if (build !== "oss") {
+        try {
+            await db
+                .delete(sessionTransferToken)
+                .where(
+                    lt(sessionTransferToken.expiresAt, new Date().getTime())
+                );
+        } catch (e) {
+            logger.warn("Error clearing expired sessionTransferToken:", e);
+        }
     }
 }

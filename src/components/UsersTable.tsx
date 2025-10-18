@@ -51,6 +51,24 @@ export default function UsersTable({ users: u }: UsersTableProps) {
     const { user, updateUser } = useUserContext();
     const { org } = useOrgContext();
     const t = useTranslations();
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const refreshData = async () => {
+        console.log("Data refreshed");
+        setIsRefreshing(true);
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            router.refresh();
+        } catch (error) {
+            toast({
+                title: t("error"),
+                description: t("refreshError"),
+                variant: "destructive"
+            });
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
 
     const columns: ColumnDef<UserRow>[] = [
         {
@@ -290,6 +308,8 @@ export default function UsersTable({ users: u }: UsersTableProps) {
                         `/${org?.org.orgId}/settings/access/users/create`
                     );
                 }}
+                onRefresh={refreshData}
+                isRefreshing={isRefreshing}
             />
         </>
     );

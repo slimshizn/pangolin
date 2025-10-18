@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { db } from "@server/db";
+import { db, TargetHealthCheck, targetHealthCheck } from "@server/db";
 import { newts, resources, sites, Target, targets } from "@server/db";
 import response from "@server/lib/response";
 import HttpCode from "@server/types/HttpCode";
@@ -31,12 +31,43 @@ const createTargetSchema = z
         method: z.string().optional().nullable(),
         port: z.number().int().min(1).max(65535),
         enabled: z.boolean().default(true),
+        hcEnabled: z.boolean().optional(),
+        hcPath: z.string().min(1).optional().nullable(),
+        hcScheme: z.string().optional().nullable(),
+        hcMode: z.string().optional().nullable(),
+        hcHostname: z.string().optional().nullable(),
+        hcPort: z.number().int().positive().optional().nullable(),
+        hcInterval: z.number().int().positive().min(5).optional().nullable(),
+        hcUnhealthyInterval: z
+            .number()
+            .int()
+            .positive()
+            .min(5)
+            .optional()
+            .nullable(),
+        hcTimeout: z.number().int().positive().min(1).optional().nullable(),
+        hcHeaders: z
+            .array(z.object({ name: z.string(), value: z.string() }))
+            .nullable()
+            .optional(),
+        hcFollowRedirects: z.boolean().optional().nullable(),
+        hcMethod: z.string().min(1).optional().nullable(),
+        hcStatus: z.number().int().optional().nullable(),
         path: z.string().optional().nullable(),
-        pathMatchType: z.enum(["exact", "prefix", "regex"]).optional().nullable()
+        pathMatchType: z
+            .enum(["exact", "prefix", "regex"])
+            .optional()
+            .nullable(),
+        rewritePath: z.string().optional().nullable(),
+        rewritePathType: z
+            .enum(["exact", "prefix", "regex", "stripPrefix"])
+            .optional()
+            .nullable(),
+        priority: z.number().int().min(1).max(1000).optional().nullable()
     })
     .strict();
 
-export type CreateTargetResponse = Target;
+export type CreateTargetResponse = Target & TargetHealthCheck;
 
 registry.registerPath({
     method: "put",
@@ -141,12 +172,15 @@ export async function createTarget(
         }
 
         let newTarget: Target[] = [];
+        let healthCheck: TargetHealthCheck[] = [];
+        let targetIps: string[] = [];
         if (site.type == "local") {
             newTarget = await db
                 .insert(targets)
                 .values({
                     resourceId,
-                    ...targetData
+                    ...targetData,
+                    priority: targetData.priority || 100
                 })
                 .returning();
         } else {
@@ -163,7 +197,10 @@ export async function createTarget(
                 );
             }
 
-            const { internalPort, targetIps } = await pickPort(site.siteId!, db);
+            const { internalPort, targetIps: newTargetIps } = await pickPort(
+                site.siteId!,
+                db
+            );
 
             if (!internalPort) {
                 return next(
@@ -178,40 +215,81 @@ export async function createTarget(
                 .insert(targets)
                 .values({
                     resourceId,
+                    siteId: site.siteId,
+                    ip: targetData.ip,
+                    method: targetData.method,
+                    port: targetData.port,
                     internalPort,
-                    ...targetData
+                    enabled: targetData.enabled,
+                    path: targetData.path,
+                    pathMatchType: targetData.pathMatchType,
+                    rewritePath: targetData.rewritePath,
+                    rewritePathType: targetData.rewritePathType,
+                    priority: targetData.priority || 100
                 })
                 .returning();
 
             // add the new target to the targetIps array
-            targetIps.push(`${targetData.ip}/32`);
+            newTargetIps.push(`${targetData.ip}/32`);
 
-            if (site.pubKey) {
-                if (site.type == "wireguard") {
-                    await addPeer(site.exitNodeId!, {
-                        publicKey: site.pubKey,
-                        allowedIps: targetIps.flat()
-                    });
-                } else if (site.type == "newt") {
-                    // get the newt on the site by querying the newt table for siteId
-                    const [newt] = await db
-                        .select()
-                        .from(newts)
-                        .where(eq(newts.siteId, site.siteId))
-                        .limit(1);
+            targetIps = newTargetIps;
+        }
 
-                    await addTargets(
-                        newt.newtId,
-                        newTarget,
-                        resource.protocol,
-                        resource.proxyPort
-                    );
-                }
+        let hcHeaders = null;
+        if (targetData.hcHeaders) {
+            hcHeaders = JSON.stringify(targetData.hcHeaders);
+        }
+
+        healthCheck = await db
+            .insert(targetHealthCheck)
+            .values({
+                targetId: newTarget[0].targetId,
+                hcEnabled: targetData.hcEnabled ?? false,
+                hcPath: targetData.hcPath ?? null,
+                hcScheme: targetData.hcScheme ?? null,
+                hcMode: targetData.hcMode ?? null,
+                hcHostname: targetData.hcHostname ?? null,
+                hcPort: targetData.hcPort ?? null,
+                hcInterval: targetData.hcInterval ?? null,
+                hcUnhealthyInterval: targetData.hcUnhealthyInterval ?? null,
+                hcTimeout: targetData.hcTimeout ?? null,
+                hcHeaders: hcHeaders,
+                hcFollowRedirects: targetData.hcFollowRedirects ?? null,
+                hcMethod: targetData.hcMethod ?? null,
+                hcStatus: targetData.hcStatus ?? null,
+                hcHealth: "unknown"
+            })
+            .returning();
+
+        if (site.pubKey) {
+            if (site.type == "wireguard") {
+                await addPeer(site.exitNodeId!, {
+                    publicKey: site.pubKey,
+                    allowedIps: targetIps.flat()
+                });
+            } else if (site.type == "newt") {
+                // get the newt on the site by querying the newt table for siteId
+                const [newt] = await db
+                    .select()
+                    .from(newts)
+                    .where(eq(newts.siteId, site.siteId))
+                    .limit(1);
+
+                await addTargets(
+                    newt.newtId,
+                    newTarget,
+                    healthCheck,
+                    resource.protocol,
+                    resource.proxyPort
+                );
             }
         }
 
         return response<CreateTargetResponse>(res, {
-            data: newTarget[0],
+            data: {
+                ...newTarget[0],
+                ...healthCheck[0]
+            },
             success: true,
             error: false,
             message: "Target created successfully",

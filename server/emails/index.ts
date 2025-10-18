@@ -6,11 +6,6 @@ import logger from "@server/logger";
 import SMTPTransport from "nodemailer/lib/smtp-transport";
 
 function createEmailClient() {
-    if (config.isManagedMode()) {
-        // LETS NOT WORRY ABOUT EMAILS IN HYBRID 
-        return;
-    }
-
     const emailConfig = config.getRawConfig().email;
     if (!emailConfig) {
         logger.warn(

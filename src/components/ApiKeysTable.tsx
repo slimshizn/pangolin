@@ -43,6 +43,25 @@ export default function ApiKeysTable({ apiKeys }: ApiKeyTableProps) {
 
     const t = useTranslations();
 
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const refreshData = async () => {
+        console.log("Data refreshed");
+        setIsRefreshing(true);
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            router.refresh();
+        } catch (error) {
+            toast({
+                title: t("error"),
+                description: t("refreshError"),
+                variant: "destructive"
+            });
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
     const deleteSite = (apiKeyId: string) => {
         api.delete(`/api-key/${apiKeyId}`)
             .catch((e) => {
@@ -186,6 +205,8 @@ export default function ApiKeysTable({ apiKeys }: ApiKeyTableProps) {
                 addApiKey={() => {
                     router.push(`/admin/api-keys/create`);
                 }}
+                onRefresh={refreshData}
+                isRefreshing={isRefreshing}
             />
         </>
     );

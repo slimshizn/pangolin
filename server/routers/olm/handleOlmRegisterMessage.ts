@@ -1,10 +1,10 @@
 import { db, ExitNode } from "@server/db";
-import { MessageHandler } from "../ws";
+import { MessageHandler } from "@server/routers/ws";
 import { clients, clientSites, exitNodes, Olm, olms, sites } from "@server/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { addPeer, deletePeer } from "../newt/peers";
 import logger from "@server/logger";
-import { listExitNodes } from "@server/lib/exitNodes";
+import { listExitNodes } from "#dynamic/lib/exitNodes";
 
 export const handleOlmRegisterMessage: MessageHandler = async (context) => {
     logger.info("Handling register olm message!");
@@ -88,10 +88,10 @@ export const handleOlmRegisterMessage: MessageHandler = async (context) => {
             .where(eq(olms.olmId, olm.olmId));
     }
 
-    if (now - (client.lastHolePunch || 0) > 6) {
-        logger.warn("Client last hole punch is too old, skipping all sites");
-        return;
-    }
+    // if (now - (client.lastHolePunch || 0) > 6) {
+    //     logger.warn("Client last hole punch is too old, skipping all sites");
+    //     return;
+    // }
 
     if (client.pubKey !== publicKey) {
         logger.info(
@@ -145,7 +145,7 @@ export const handleOlmRegisterMessage: MessageHandler = async (context) => {
 
         // Validate endpoint and hole punch status
         if (!site.endpoint) {
-            logger.warn(`Site ${site.siteId} has no endpoint, skipping`);
+            logger.warn(`In olm register: site ${site.siteId} has no endpoint, skipping`);
             continue;
         }
 

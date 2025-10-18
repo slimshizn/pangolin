@@ -13,7 +13,6 @@ import * as siteResource from "./siteResource";
 import * as supporterKey from "./supporterKey";
 import * as accessToken from "./accessToken";
 import * as idp from "./idp";
-import * as license from "./license";
 import * as apiKeys from "./apiKeys";
 import HttpCode from "@server/types/HttpCode";
 import {
@@ -38,13 +37,13 @@ import {
     verifyUserIsOrgOwner,
     verifySiteResourceAccess
 } from "@server/middlewares";
-import { createStore } from "@server/lib/rateLimitStore";
 import { ActionsEnum } from "@server/auth/actions";
 import { createNewt, getNewtToken } from "./newt";
 import { getOlmToken } from "./olm";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import createHttpError from "http-errors";
 import { build } from "@server/build";
+import { createStore } from "#dynamic/lib/rateLimitStore";
 
 // Root routes
 export const unauthenticated = Router();
@@ -491,6 +490,13 @@ authenticated.post(
 );
 
 authenticated.post(
+    `/resource/:resourceId/header-auth`,
+    verifyResourceAccess,
+    verifyUserHasAction(ActionsEnum.setResourceHeaderAuth),
+    resource.setResourceHeaderAuth
+);
+
+authenticated.post(
     `/resource/:resourceId/whitelist`,
     verifyResourceAccess,
     verifyUserHasAction(ActionsEnum.setResourceWhitelist),
@@ -540,7 +546,10 @@ authenticated.post(
 );
 authenticated.post(`/supporter-key/hide`, supporterKey.hideSupporterKey);
 
-unauthenticated.get("/resource/:resourceId/auth", resource.getResourceAuthInfo);
+unauthenticated.get(
+    "/resource/:resourceGuid/auth",
+    resource.getResourceAuthInfo
+);
 
 // authenticated.get(
 //     "/role/:roleId/resources",
@@ -666,6 +675,8 @@ authenticated.post(
     idp.updateOidcIdp
 );
 
+
+
 authenticated.delete("/idp/:idpId", verifyUserIsServerAdmin, idp.deleteIdp);
 
 authenticated.get("/idp/:idpId", verifyUserIsServerAdmin, idp.getIdp);
@@ -694,32 +705,9 @@ authenticated.get(
     idp.listIdpOrgPolicies
 );
 
+
 authenticated.get("/idp", idp.listIdps); // anyone can see this; it's just a list of idp names and ids
 authenticated.get("/idp/:idpId", verifyUserIsServerAdmin, idp.getIdp);
-
-authenticated.post(
-    "/license/activate",
-    verifyUserIsServerAdmin,
-    license.activateLicense
-);
-
-authenticated.get(
-    "/license/keys",
-    verifyUserIsServerAdmin,
-    license.listLicenseKeys
-);
-
-authenticated.delete(
-    "/license/:licenseKey",
-    verifyUserIsServerAdmin,
-    license.deleteLicenseKey
-);
-
-authenticated.post(
-    "/license/recheck",
-    verifyUserIsServerAdmin,
-    license.recheckStatus
-);
 
 authenticated.get(
     `/api-key/:apiKeyId`,
@@ -833,7 +821,8 @@ authRouter.use(
     rateLimit({
         windowMs: config.getRawConfig().rate_limits.auth.window_minutes,
         max: config.getRawConfig().rate_limits.auth.max_requests,
-        keyGenerator: (req) => `authRouterGlobal:${ipKeyGenerator(req.ip || "")}:${req.path}`,
+        keyGenerator: (req) =>
+            `authRouterGlobal:${ipKeyGenerator(req.ip || "")}:${req.path}`,
         handler: (req, res, next) => {
             const message = `Rate limit exceeded. You can make ${config.getRawConfig().rate_limits.auth.max_requests} requests every ${config.getRawConfig().rate_limits.auth.window_minutes} minute(s).`;
             return next(createHttpError(HttpCode.TOO_MANY_REQUESTS, message));
@@ -847,7 +836,8 @@ authRouter.put(
     rateLimit({
         windowMs: 15 * 60 * 1000,
         max: 15,
-        keyGenerator: (req) => `signup:${ipKeyGenerator(req.ip || "")}:${req.body.email}`,
+        keyGenerator: (req) =>
+            `signup:${ipKeyGenerator(req.ip || "")}:${req.body.email}`,
         handler: (req, res, next) => {
             const message = `You can only sign up ${15} times every ${15} minutes. Please try again later.`;
             return next(createHttpError(HttpCode.TOO_MANY_REQUESTS, message));
@@ -861,7 +851,8 @@ authRouter.post(
     rateLimit({
         windowMs: 15 * 60 * 1000,
         max: 15,
-        keyGenerator: (req) => `login:${req.body.email || ipKeyGenerator(req.ip || "")}`,
+        keyGenerator: (req) =>
+            `login:${req.body.email || ipKeyGenerator(req.ip || "")}`,
         handler: (req, res, next) => {
             const message = `You can only log in ${15} times every ${15} minutes. Please try again later.`;
             return next(createHttpError(HttpCode.TOO_MANY_REQUESTS, message));
@@ -876,7 +867,8 @@ authRouter.post(
     rateLimit({
         windowMs: 15 * 60 * 1000,
         max: 900,
-        keyGenerator: (req) => `newtGetToken:${req.body.newtId || ipKeyGenerator(req.ip || "")}`,
+        keyGenerator: (req) =>
+            `newtGetToken:${req.body.newtId || ipKeyGenerator(req.ip || "")}`,
         handler: (req, res, next) => {
             const message = `You can only request a Newt token ${900} times every ${15} minutes. Please try again later.`;
             return next(createHttpError(HttpCode.TOO_MANY_REQUESTS, message));
@@ -890,7 +882,8 @@ authRouter.post(
     rateLimit({
         windowMs: 15 * 60 * 1000,
         max: 900,
-        keyGenerator: (req) => `olmGetToken:${req.body.newtId || ipKeyGenerator(req.ip || "")}`,
+        keyGenerator: (req) =>
+            `olmGetToken:${req.body.newtId || ipKeyGenerator(req.ip || "")}`,
         handler: (req, res, next) => {
             const message = `You can only request an Olm token ${900} times every ${15} minutes. Please try again later.`;
             return next(createHttpError(HttpCode.TOO_MANY_REQUESTS, message));
@@ -938,7 +931,8 @@ authRouter.post(
     rateLimit({
         windowMs: 15 * 60 * 1000,
         max: 15,
-        keyGenerator: (req) => `signup:${req.user?.userId || ipKeyGenerator(req.ip || "")}`,
+        keyGenerator: (req) =>
+            `signup:${req.user?.userId || ipKeyGenerator(req.ip || "")}`,
         handler: (req, res, next) => {
             const message = `You can only disable 2FA ${15} times every ${15} minutes. Please try again later.`;
             return next(createHttpError(HttpCode.TOO_MANY_REQUESTS, message));
@@ -952,7 +946,8 @@ authRouter.post(
     rateLimit({
         windowMs: 15 * 60 * 1000,
         max: 15,
-        keyGenerator: (req) => `signup:${req.body.email || ipKeyGenerator(req.ip || "")}`,
+        keyGenerator: (req) =>
+            `signup:${req.body.email || ipKeyGenerator(req.ip || "")}`,
         handler: (req, res, next) => {
             const message = `You can only sign up ${15} times every ${15} minutes. Please try again later.`;
             return next(createHttpError(HttpCode.TOO_MANY_REQUESTS, message));
@@ -1007,7 +1002,8 @@ authRouter.post(
     rateLimit({
         windowMs: 15 * 60 * 1000,
         max: 15,
-        keyGenerator: (req) => `resetPassword:${req.body.email || ipKeyGenerator(req.ip || "")}`,
+        keyGenerator: (req) =>
+            `resetPassword:${req.body.email || ipKeyGenerator(req.ip || "")}`,
         handler: (req, res, next) => {
             const message = `You can only request a password reset ${15} times every ${15} minutes. Please try again later.`;
             return next(createHttpError(HttpCode.TOO_MANY_REQUESTS, message));
@@ -1129,7 +1125,8 @@ authRouter.delete(
     rateLimit({
         windowMs: 15 * 60 * 1000, // 15 minutes
         max: 20, // Allow 10 authentication attempts per 15 minutes per IP
-        keyGenerator: (req) => `securityKeyAuth:${req.user?.userId || ipKeyGenerator(req.ip || "")}`,
+        keyGenerator: (req) =>
+            `securityKeyAuth:${req.user?.userId || ipKeyGenerator(req.ip || "")}`,
         handler: (req, res, next) => {
             const message = `You can only delete a security key ${10} times every ${15} minutes. Please try again later.`;
             return next(createHttpError(HttpCode.TOO_MANY_REQUESTS, message));

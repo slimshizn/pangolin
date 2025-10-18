@@ -30,7 +30,7 @@ const updateResourceRuleParamsSchema = z
 const updateResourceRuleSchema = z
     .object({
         action: z.enum(["ACCEPT", "DROP", "PASS"]).optional(),
-        match: z.enum(["CIDR", "IP", "PATH"]).optional(),
+        match: z.enum(["CIDR", "IP", "PATH", "GEOIP"]).optional(),
         value: z.string().min(1).optional(),
         priority: z.number().int(),
         enabled: z.boolean().optional()

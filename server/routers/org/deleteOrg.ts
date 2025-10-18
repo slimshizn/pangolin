@@ -9,7 +9,7 @@ import createHttpError from "http-errors";
 import { ActionsEnum, checkUserActionPermission } from "@server/auth/actions";
 import logger from "@server/logger";
 import { fromError } from "zod-validation-error";
-import { sendToClient } from "../ws";
+import { sendToClient } from "#dynamic/routers/ws";
 import { deletePeer } from "../gerbil/peers";
 import { OpenAPITags, registry } from "@server/openApi";
 

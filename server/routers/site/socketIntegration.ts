@@ -9,7 +9,7 @@ import createHttpError from "http-errors";
 import { z } from "zod";
 import { fromError } from "zod-validation-error";
 import stoi from "@server/lib/stoi";
-import { sendToClient } from "../ws";
+import { sendToClient } from "#dynamic/routers/ws";
 import {
     fetchContainers,
     dockerSocketCache,

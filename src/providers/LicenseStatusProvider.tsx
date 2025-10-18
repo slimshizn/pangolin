@@ -1,6 +1,7 @@
 "use client";
 
 import LicenseStatusContext from "@app/contexts/licenseStatusContext";
+import { build } from "@server/build";
 import { LicenseStatus } from "@server/license/license";
 import { useState } from "react";
 
@@ -37,13 +38,6 @@ export function LicenseStatusProvider({
         if (
             licenseStatusState?.isHostLicensed &&
             !licenseStatusState?.isLicenseValid
-        ) {
-            return true;
-        }
-        if (
-            licenseStatusState?.maxSites &&
-            licenseStatusState?.usedSites &&
-            licenseStatusState.usedSites > licenseStatusState.maxSites
         ) {
             return true;
         }

@@ -230,7 +230,9 @@ const TwoFactorSetupForm = forwardRef<
                     <div className="space-y-4">
                         <p>{t("otpSetupScanQr")}</p>
                         <div className="h-[250px] mx-auto flex items-center justify-center">
+                            <div className="bg-white p-6 border rounded-md">
                             <QRCodeCanvas value={secretUri} size={200} />
+                            </div>
                         </div>
                         <div className="max-w-md mx-auto">
                             <CopyTextBox text={secretUri} wrapText={false} />

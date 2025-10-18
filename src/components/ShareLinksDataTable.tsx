@@ -10,12 +10,16 @@ interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
     data: TData[];
     createShareLink?: () => void;
+    onRefresh?: () => void;
+    isRefreshing?: boolean;
 }
 
 export function ShareLinksDataTable<TData, TValue>({
     columns,
     data,
-    createShareLink
+    createShareLink,
+    onRefresh,
+    isRefreshing
 }: DataTableProps<TData, TValue>) {
 
     const t = useTranslations();
@@ -29,6 +33,8 @@ export function ShareLinksDataTable<TData, TValue>({
             searchPlaceholder={t('shareSearch')}
             searchColumn="name"
             onAdd={createShareLink}
+            onRefresh={onRefresh}
+            isRefreshing={isRefreshing}
             addButtonText={t('shareCreate')}
         />
     );

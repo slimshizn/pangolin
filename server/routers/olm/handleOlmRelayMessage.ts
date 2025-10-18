@@ -1,5 +1,5 @@
 import { db, exitNodes, sites } from "@server/db";
-import { MessageHandler } from "../ws";
+import { MessageHandler } from "@server/routers/ws";
 import { clients, clientSites, Olm } from "@server/db";
 import { and, eq } from "drizzle-orm";
 import { updatePeer } from "../newt/peers";

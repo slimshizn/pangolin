@@ -1,4 +1,4 @@
-import { sendToClient } from "../ws";
+import { sendToClient } from "#dynamic/routers/ws";
 
 export async function addTargets(
     newtId: string,

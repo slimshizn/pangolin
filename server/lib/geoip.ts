@@ -1,31 +1,32 @@
-import axios from "axios";
-import config from "./config";
-import { tokenManager } from "./tokenManager";
 import logger from "@server/logger";
+import { maxmindLookup } from "@server/db/maxmind";
 
 export async function getCountryCodeForIp(
     ip: string
 ): Promise<string | undefined> {
     try {
-        const response = await axios.get(
-            `${config.getRawConfig().managed?.endpoint}/api/v1/hybrid/geoip/${ip}`,
-            await tokenManager.getAuthHeader()
+        if (!maxmindLookup) {
+            logger.warn(
+                "MaxMind DB path not configured, cannot perform GeoIP lookup"
+            );
+            return;
+        }
+
+        const result = maxmindLookup.get(ip);
+
+        if (!result || !result.country) {
+            return;
+        }
+
+        const { country } = result;
+
+        logger.debug(
+            `GeoIP lookup successful for IP ${ip}: ${country.iso_code}`
         );
 
-        return response.data.data.countryCode;
+        return country.iso_code;
     } catch (error) {
-        if (axios.isAxiosError(error)) {
-            logger.error("Error fetching config in verify session:", {
-                message: error.message,
-                code: error.code,
-                status: error.response?.status,
-                statusText: error.response?.statusText,
-                url: error.config?.url,
-                method: error.config?.method
-            });
-        } else {
-            logger.error("Error fetching config in verify session:", error);
-        }
+        logger.error("Error fetching config in verify session:", error);
     }
 
     return;

@@ -61,6 +61,25 @@ export default function ShareLinksTable({
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [rows, setRows] = useState<ShareLinkRow[]>(shareLinks);
 
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const refreshData = async () => {
+        console.log("Data refreshed");
+        setIsRefreshing(true);
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            router.refresh();
+        } catch (error) {
+            toast({
+                title: t("error"),
+                description: t("refreshError"),
+                variant: "destructive"
+            });
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
     function formatLink(link: string) {
         return link.substring(0, 20) + "..." + link.substring(link.length - 20);
     }
@@ -292,6 +311,8 @@ export default function ShareLinksTable({
                 createShareLink={() => {
                     setIsCreateModalOpen(true);
                 }}
+                onRefresh={refreshData}
+                isRefreshing={isRefreshing}
             />
         </>
     );

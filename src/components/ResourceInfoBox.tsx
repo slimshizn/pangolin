@@ -12,24 +12,27 @@ import {
 } from "@app/components/InfoSection";
 import { useTranslations } from "next-intl";
 import { build } from "@server/build";
-import { toUnicode } from 'punycode';
+import CertificateStatus from "@app/components/private/CertificateStatus";
+import { toUnicode } from "punycode";
+import { useEnvContext } from "@app/hooks/useEnvContext";
 
 type ResourceInfoBoxType = {};
 
-export default function ResourceInfoBox({ }: ResourceInfoBoxType) {
+export default function ResourceInfoBox({}: ResourceInfoBoxType) {
     const { resource, authInfo } = useResourceContext();
+    const { env } = useEnvContext();
 
     const t = useTranslations();
 
-
     const fullUrl = `${resource.ssl ? "https" : "http"}://${toUnicode(resource.fullDomain || "")}`;
-
-
 
     return (
         <Alert>
             <AlertDescription>
-                <InfoSections cols={3}>
+                {/* 4 cols because of the certs */}
+                <InfoSections
+                    cols={resource.http && env.flags.usePangolinDns ? 4 : 3}
+                >
                     {resource.http ? (
                         <>
                             <InfoSection>
@@ -38,9 +41,10 @@ export default function ResourceInfoBox({ }: ResourceInfoBoxType) {
                                 </InfoSectionTitle>
                                 <InfoSectionContent>
                                     {authInfo.password ||
-                                        authInfo.pincode ||
-                                        authInfo.sso ||
-                                        authInfo.whitelist ? (
+                                    authInfo.pincode ||
+                                    authInfo.sso ||
+                                    authInfo.whitelist ||
+                                    authInfo.headerAuth ? (
                                         <div className="flex items-start space-x-2 text-green-500">
                                             <ShieldCheck className="w-4 h-4 mt-0.5" />
                                             <span>{t("protected")}</span>
@@ -118,6 +122,37 @@ export default function ResourceInfoBox({ }: ResourceInfoBoxType) {
                             )} */}
                         </>
                     )}
+                    {/* <InfoSection> */}
+                    {/*     <InfoSectionTitle>{t('visibility')}</InfoSectionTitle> */}
+                    {/*     <InfoSectionContent> */}
+                    {/*         <span> */}
+                    {/*             {resource.enabled ? t('enabled') : t('disabled')} */}
+                    {/*         </span> */}
+                    {/*     </InfoSectionContent> */}
+                    {/* </InfoSection> */}
+                    {/* Certificate Status Column */}
+                    {resource.http &&
+                        resource.domainId &&
+                        resource.fullDomain &&
+                        env.flags.usePangolinDns && (
+                            <InfoSection>
+                                <InfoSectionTitle>
+                                    {t("certificateStatus", {
+                                        defaultValue: "Certificate"
+                                    })}
+                                </InfoSectionTitle>
+                                <InfoSectionContent>
+                                    <CertificateStatus
+                                        orgId={resource.orgId}
+                                        domainId={resource.domainId}
+                                        fullDomain={resource.fullDomain}
+                                        autoFetch={true}
+                                        showLabel={false}
+                                        polling={true}
+                                    />
+                                </InfoSectionContent>
+                            </InfoSection>
+                        )}
                     <InfoSection>
                         <InfoSectionTitle>{t("visibility")}</InfoSectionTitle>
                         <InfoSectionContent>

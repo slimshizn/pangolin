@@ -1,0 +1,17 @@
+meta {
+  name: Set API Key Orgs
+  type: http
+  seq: 7
+}
+
+post {
+  url: http://localhost:3000/api/v1/api-key/ex0izu2c37fjz9x/orgs
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "orgIds": ["home-lab"]
+  }
+}

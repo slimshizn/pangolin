@@ -1,7 +1,7 @@
 import { db } from "@server/db";
 import { newts, sites } from "@server/db";
 import { eq } from "drizzle-orm";
-import { sendToClient } from "../ws";
+import { sendToClient } from "#dynamic/routers/ws";
 import logger from "@server/logger";
 
 export async function addPeer(

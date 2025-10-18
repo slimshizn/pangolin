@@ -29,7 +29,7 @@ import m24 from "./scriptsSqlite/1.9.0";
 import m25 from "./scriptsSqlite/1.10.0";
 import m26 from "./scriptsSqlite/1.10.1";
 import m27 from "./scriptsSqlite/1.10.2";
-import m28 from "./scriptsSqlite/1.10.4";
+import m28 from "./scriptsSqlite/1.11.0";
 
 // THIS CANNOT IMPORT ANYTHING FROM THE SERVER
 // EXCEPT FOR THE DATABASE AND THE SCHEMA
@@ -58,7 +58,7 @@ const migrations = [
     { version: "1.10.0", run: m25 },
     { version: "1.10.1", run: m26 },
     { version: "1.10.2", run: m27 },
-    { version: "1.10.4", run: m28 },
+    { version: "1.11.0", run: m28 },
     // Add new migrations here as they are created
 ] as const;
 
@@ -136,7 +136,7 @@ async function executeScripts() {
         const pendingMigrations = lastExecuted
             .map((m) => m)
             .sort((a, b) => semver.compare(b.version, a.version));
-        const startVersion = pendingMigrations[0]?.version ?? "0.0.0";
+        const startVersion = pendingMigrations[0]?.version ?? APP_VERSION;
         console.log(`Starting migrations from version ${startVersion}`);
 
         const migrationsToRun = migrations.filter((migration) =>

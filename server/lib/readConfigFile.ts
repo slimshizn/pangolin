@@ -12,42 +12,36 @@ const getEnvOrYaml = (envVar: string) => (valFromYaml: any) => {
 
 export const configSchema = z
     .object({
-        app: z.object({
-            dashboard_url: z
-                .string()
-                .url()
-                .pipe(z.string().url())
-                .transform((url) => url.toLowerCase())
-                .optional(),
-            log_level: z
-                .enum(["debug", "info", "warn", "error"])
-                .optional()
-                .default("info"),
-            save_logs: z.boolean().optional().default(false),
-            log_failed_attempts: z.boolean().optional().default(false),
-            telemetry: z
-                .object({
-                    anonymous_usage: z.boolean().optional().default(true)
-                })
-                .optional()
-                .default({})
-        }).optional().default({
-            log_level: "info",
-            save_logs: false,
-            log_failed_attempts: false,
-            telemetry: {
-                anonymous_usage: true
-            }
-        }),
-        managed: z
+        app: z
             .object({
-                name: z.string().optional(),
-                id: z.string().optional(),
-                secret: z.string().optional(),
-                endpoint: z.string().optional().default("https://pangolin.fossorial.io"),
-                redirect_endpoint: z.string().optional()
+                dashboard_url: z
+                    .string()
+                    .url()
+                    .pipe(z.string().url())
+                    .transform((url) => url.toLowerCase())
+                    .optional(),
+                log_level: z
+                    .enum(["debug", "info", "warn", "error"])
+                    .optional()
+                    .default("info"),
+                save_logs: z.boolean().optional().default(false),
+                log_failed_attempts: z.boolean().optional().default(false),
+                telemetry: z
+                    .object({
+                        anonymous_usage: z.boolean().optional().default(true)
+                    })
+                    .optional()
+                    .default({})
             })
-            .optional(),
+            .optional()
+            .default({
+                log_level: "info",
+                save_logs: false,
+                log_failed_attempts: false,
+                telemetry: {
+                    anonymous_usage: true
+                }
+            }),
         domains: z
             .record(
                 z.string(),
@@ -61,103 +55,130 @@ export const configSchema = z
                 })
             )
             .optional(),
-        server: z.object({
-            integration_port: portSchema
-                .optional()
-                .default(3004)
-                .transform(stoi)
-                .pipe(portSchema.optional()),
-            external_port: portSchema
-                .optional()
-                .default(3000)
-                .transform(stoi)
-                .pipe(portSchema),
-            internal_port: portSchema
-                .optional()
-                .default(3001)
-                .transform(stoi)
-                .pipe(portSchema),
-            next_port: portSchema
-                .optional()
-                .default(3002)
-                .transform(stoi)
-                .pipe(portSchema),
-            internal_hostname: z
-                .string()
-                .optional()
-                .default("pangolin")
-                .transform((url) => url.toLowerCase()),
-            session_cookie_name: z
-                .string()
-                .optional()
-                .default("p_session_token"),
-            resource_access_token_param: z
-                .string()
-                .optional()
-                .default("p_token"),
-            resource_access_token_headers: z
-                .object({
-                    id: z.string().optional().default("P-Access-Token-Id"),
-                    token: z.string().optional().default("P-Access-Token")
-                })
-                .optional()
-                .default({}),
-            resource_session_request_param: z
-                .string()
-                .optional()
-                .default("resource_session_request_param"),
-            dashboard_session_length_hours: z
-                .number()
-                .positive()
-                .gt(0)
-                .optional()
-                .default(720),
-            resource_session_length_hours: z
-                .number()
-                .positive()
-                .gt(0)
-                .optional()
-                .default(720),
-            cors: z
-                .object({
-                    origins: z.array(z.string()).optional(),
-                    methods: z.array(z.string()).optional(),
-                    allowed_headers: z.array(z.string()).optional(),
-                    credentials: z.boolean().optional()
-                })
-                .optional(),
-            trust_proxy: z.number().int().gte(0).optional().default(1),
-            secret: z
-                .string()
-                .pipe(z.string().min(8))
-                .optional()
-        }).optional().default({
-            integration_port: 3003,
-            external_port: 3000,
-            internal_port: 3001,
-            next_port: 3002,
-            internal_hostname: "pangolin",
-            session_cookie_name: "p_session_token",
-            resource_access_token_param: "p_token",
-            resource_access_token_headers: {
-                id: "P-Access-Token-Id",
-                token: "P-Access-Token"
-            },
-            resource_session_request_param: "resource_session_request_param",
-            dashboard_session_length_hours: 720,
-            resource_session_length_hours: 720,
-            trust_proxy: 1
-        }),
+        server: z
+            .object({
+                integration_port: portSchema
+                    .optional()
+                    .default(3003)
+                    .transform(stoi)
+                    .pipe(portSchema.optional()),
+                external_port: portSchema
+                    .optional()
+                    .default(3000)
+                    .transform(stoi)
+                    .pipe(portSchema),
+                internal_port: portSchema
+                    .optional()
+                    .default(3001)
+                    .transform(stoi)
+                    .pipe(portSchema),
+                next_port: portSchema
+                    .optional()
+                    .default(3002)
+                    .transform(stoi)
+                    .pipe(portSchema),
+                internal_hostname: z
+                    .string()
+                    .optional()
+                    .default("pangolin")
+                    .transform((url) => url.toLowerCase()),
+                session_cookie_name: z
+                    .string()
+                    .optional()
+                    .default("p_session_token"),
+                resource_access_token_param: z
+                    .string()
+                    .optional()
+                    .default("p_token"),
+                resource_access_token_headers: z
+                    .object({
+                        id: z.string().optional().default("P-Access-Token-Id"),
+                        token: z.string().optional().default("P-Access-Token")
+                    })
+                    .optional()
+                    .default({}),
+                resource_session_request_param: z
+                    .string()
+                    .optional()
+                    .default("resource_session_request_param"),
+                dashboard_session_length_hours: z
+                    .number()
+                    .positive()
+                    .gt(0)
+                    .optional()
+                    .default(720),
+                resource_session_length_hours: z
+                    .number()
+                    .positive()
+                    .gt(0)
+                    .optional()
+                    .default(720),
+                cors: z
+                    .object({
+                        origins: z.array(z.string()).optional(),
+                        methods: z.array(z.string()).optional(),
+                        allowed_headers: z.array(z.string()).optional(),
+                        credentials: z.boolean().optional()
+                    })
+                    .optional(),
+                trust_proxy: z.number().int().gte(0).optional().default(1),
+                secret: z.string().pipe(z.string().min(8)).optional(),
+                maxmind_db_path: z.string().optional()
+            })
+            .optional()
+            .default({
+                integration_port: 3003,
+                external_port: 3000,
+                internal_port: 3001,
+                next_port: 3002,
+                internal_hostname: "pangolin",
+                session_cookie_name: "p_session_token",
+                resource_access_token_param: "p_token",
+                resource_access_token_headers: {
+                    id: "P-Access-Token-Id",
+                    token: "P-Access-Token"
+                },
+                resource_session_request_param:
+                    "resource_session_request_param",
+                dashboard_session_length_hours: 720,
+                resource_session_length_hours: 720,
+                trust_proxy: 1
+            }),
         postgres: z
             .object({
-                connection_string: z.string(),
+                connection_string: z.string().optional(),
                 replicas: z
                     .array(
                         z.object({
                             connection_string: z.string()
                         })
                     )
+                    .optional(),
+                pool: z
+                    .object({
+                        max_connections: z
+                            .number()
+                            .positive()
+                            .optional()
+                            .default(20),
+                        max_replica_connections: z
+                            .number()
+                            .positive()
+                            .optional()
+                            .default(10),
+                        idle_timeout_ms: z
+                            .number()
+                            .positive()
+                            .optional()
+                            .default(30000),
+                        connection_timeout_ms: z
+                            .number()
+                            .positive()
+                            .optional()
+                            .default(5000)
+                    })
                     .optional()
+                    .default({})
             })
             .optional(),
         traefik: z
@@ -178,7 +199,10 @@ export const configSchema = z
                     .optional()
                     .default("/var/dynamic/router_config.yml"),
                 static_domains: z.array(z.string()).optional().default([]),
-                site_types: z.array(z.string()).optional().default(["newt", "wireguard", "local"]),
+                site_types: z
+                    .array(z.string())
+                    .optional()
+                    .default(["newt", "wireguard", "local"]),
                 allow_raw_resources: z.boolean().optional().default(true),
                 file_mode: z.boolean().optional().default(false)
             })
@@ -305,10 +329,7 @@ export const configSchema = z
             if (data.flags?.disable_config_managed_domains) {
                 return true;
             }
-            // If hybrid is defined, domains are not required
-            if (data.managed) {
-                return true;
-            }
+
             if (keys.length === 0) {
                 return false;
             }
@@ -320,15 +341,14 @@ export const configSchema = z
     )
     .refine(
         (data) => {
-            // If hybrid is defined, server secret is not required
-            if (data.managed) {
-                return true;
-            }
             // If hybrid is not defined, server secret must be defined. If its not defined already then pull it from env
             if (data.server?.secret === undefined) {
                 data.server.secret = process.env.SERVER_SECRET;
             }
-            return data.server?.secret !== undefined && data.server.secret.length > 0;
+            return (
+                data.server?.secret !== undefined &&
+                data.server.secret.length > 0
+            );
         },
         {
             message: "Server secret must be defined"
@@ -336,12 +356,11 @@ export const configSchema = z
     )
     .refine(
         (data) => {
-            // If hybrid is defined, dashboard_url is not required
-            if (data.managed) {
-                return true;
-            }
             // If hybrid is not defined, dashboard_url must be defined
-            return data.app.dashboard_url !== undefined && data.app.dashboard_url.length > 0;
+            return (
+                data.app.dashboard_url !== undefined &&
+                data.app.dashboard_url.length > 0
+            );
         },
         {
             message: "Dashboard URL must be defined"

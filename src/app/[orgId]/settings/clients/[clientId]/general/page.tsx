@@ -115,7 +115,7 @@ export default function GeneralPage() {
         try {
             await api.post(`/client/${client?.clientId}`, {
                 name: data.name,
-                siteIds: data.siteIds.map(site => site.id)
+                siteIds: data.siteIds.map(site => parseInt(site.id))
             });
 
             updateClient({ name: data.name });

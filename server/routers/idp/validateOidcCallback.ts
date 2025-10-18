@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { db } from "@server/db";
+import { db, Org } from "@server/db";
 import response from "@server/lib/response";
 import HttpCode from "@server/types/HttpCode";
 import createHttpError from "http-errors";
@@ -30,6 +30,9 @@ import {
 } from "@server/auth/sessions/app";
 import { decrypt } from "@server/lib/crypto";
 import { UserType } from "@server/types/UserTypes";
+import { FeatureId } from "@server/lib/billing";
+import { usageService } from "@server/lib/billing/usageService";
+import { build } from "@server/build";
 
 const ensureTrailingSlash = (url: string): string => {
     return url;
@@ -45,6 +48,10 @@ const bodySchema = z.object({
     code: z.string().nonempty(),
     state: z.string().nonempty(),
     storedState: z.string().nonempty()
+});
+
+const querySchema = z.object({
+    loginPageId: z.coerce.number().optional()
 });
 
 export type ValidateOidcUrlCallbackResponse = {
@@ -79,6 +86,18 @@ export async function validateOidcCallback(
             );
         }
 
+        const parsedQuery = querySchema.safeParse(req.query);
+        if (!parsedQuery.success) {
+            return next(
+                createHttpError(
+                    HttpCode.BAD_REQUEST,
+                    fromError(parsedQuery.error).toString()
+                )
+            );
+        }
+
+        const { loginPageId } = parsedQuery.data;
+
         const { storedState, code, state: expectedState } = parsedBody.data;
 
         const [existingIdp] = await db
@@ -107,7 +126,11 @@ export async function validateOidcCallback(
             key
         );
 
-        const redirectUrl = generateOidcRedirectUrl(existingIdp.idp.idpId);
+        const redirectUrl = await generateOidcRedirectUrl(
+            existingIdp.idp.idpId,
+            undefined,
+            loginPageId
+        );
         const client = new arctic.OAuth2Client(
             decryptedClientId,
             decryptedClientSecret,
@@ -233,7 +256,18 @@ export async function validateOidcCallback(
             );
 
         if (existingIdp.idp.autoProvision) {
-            const allOrgs = await db.select().from(orgs);
+            let allOrgs: Org[] = [];
+
+            if (build === "saas") {
+                const idpOrgs = await db
+                    .select()
+                    .from(idpOrg)
+                    .where(eq(idpOrg.idpId, existingIdp.idp.idpId))
+                    .innerJoin(orgs, eq(orgs.orgId, idpOrg.orgId));
+                allOrgs = idpOrgs.map((o) => o.orgs);
+            } else {
+                allOrgs = await db.select().from(orgs);
+            }
 
             const defaultRoleMapping = existingIdp.idp.defaultRoleMapping;
             const defaultOrgMapping = existingIdp.idp.defaultOrgMapping;
@@ -269,6 +303,8 @@ export async function validateOidcCallback(
                         continue;
                     }
                 }
+
+                // user could be allowed in this org, now find the role
 
                 const roleMapping =
                     idpOrgRes?.roleMapping || defaultRoleMapping;
@@ -313,6 +349,24 @@ export async function validateOidcCallback(
             logger.debug("User org info", { userOrgInfo });
 
             let existingUserId = existingUser?.userId;
+
+            if (!userOrgInfo.length) {
+                if (existingUser) {
+                    // delete the user
+                    // cascade will also delete org users
+
+                    await db
+                        .delete(users)
+                        .where(eq(users.userId, existingUser.userId));
+                }
+
+                return next(
+                    createHttpError(
+                        HttpCode.UNAUTHORIZED,
+                        `No policies matched for ${userIdentifier}. This user must be added to an organization before logging in.`
+                    )
+                );
+            }
 
             const orgUserCounts: { orgId: string; userCount: number }[] = [];
 
@@ -380,12 +434,14 @@ export async function validateOidcCallback(
                 }
 
                 // Update roles for existing auto-provisioned orgs where the role has changed
-                const orgsToUpdate = autoProvisionedOrgs.filter((currentOrg) => {
-                    const newOrg = userOrgInfo.find(
-                        (newOrg) => newOrg.orgId === currentOrg.orgId
-                    );
-                    return newOrg && newOrg.roleId !== currentOrg.roleId;
-                });
+                const orgsToUpdate = autoProvisionedOrgs.filter(
+                    (currentOrg) => {
+                        const newOrg = userOrgInfo.find(
+                            (newOrg) => newOrg.orgId === currentOrg.orgId
+                        );
+                        return newOrg && newOrg.roleId !== currentOrg.roleId;
+                    }
+                );
 
                 if (orgsToUpdate.length > 0) {
                     for (const org of orgsToUpdate) {
@@ -440,6 +496,14 @@ export async function validateOidcCallback(
                     });
                 }
             });
+
+            for (const orgCount of orgUserCounts) {
+                await usageService.updateDaily(
+                    orgCount.orgId,
+                    FeatureId.USERS,
+                    orgCount.userCount
+                );
+            }
 
             const token = generateSessionToken();
             const sess = await createSession(token, existingUserId!);

@@ -15,7 +15,7 @@ import {
 import { generateSessionToken, SESSION_COOKIE_EXPIRES } from "@server/auth/sessions/app";
 import { SESSION_COOKIE_EXPIRES as RESOURCE_SESSION_COOKIE_EXPIRES } from "@server/auth/sessions/resource";
 import config from "@server/lib/config";
-import { response } from "@server/lib";
+import { response } from "@server/lib/response";
 
 const exchangeSessionBodySchema = z.object({
     requestToken: z.string(),

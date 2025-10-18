@@ -14,12 +14,14 @@ import {
     TooltipProvider,
     TooltipTrigger
 } from "@app/components/ui/tooltip";
+import { build } from "@server/build";
 
 export type SidebarNavItem = {
     href: string;
     title: string;
     icon?: React.ReactNode;
-    showProfessional?: boolean;
+    showEE?: boolean;
+    isBeta?: boolean;
 };
 
 export type SidebarNavSection = {
@@ -71,7 +73,7 @@ export function SidebarNav({
         isDisabled: boolean
     ) => {
         const tooltipText =
-            item.showProfessional && !isUnlocked()
+            item.showEE && !isUnlocked()
                 ? `${t(item.title)} (${t("licenseBadge")})`
                 : t(item.title);
 
@@ -106,11 +108,24 @@ export function SidebarNav({
                 {!isCollapsed && (
                     <>
                         <span>{t(item.title)}</span>
-                        {item.showProfessional && !isUnlocked() && (
-                            <Badge variant="outlinePrimary" className="ml-2">
-                                {t("licenseBadge")}
+                        {item.isBeta && (
+                            <Badge
+                                variant="outline"
+                                className="ml-2 text-muted-foreground"
+                            >
+                                {t("beta")}
                             </Badge>
                         )}
+                        {build === "enterprise" &&
+                            item.showEE &&
+                            !isUnlocked() && (
+                                <Badge
+                                    variant="outlinePrimary"
+                                    className="ml-2"
+                                >
+                                    {t("licenseBadge")}
+                                </Badge>
+                            )}
                     </>
                 )}
             </Link>
@@ -154,9 +169,11 @@ export function SidebarNav({
                         {section.items.map((item) => {
                             const hydratedHref = hydrateHref(item.href);
                             const isActive = pathname.startsWith(hydratedHref);
-                            const isProfessional =
-                                item.showProfessional && !isUnlocked();
-                            const isDisabled = disabled || isProfessional;
+                            const isEE =
+                                build === "enterprise" &&
+                                item.showEE &&
+                                !isUnlocked();
+                            const isDisabled = disabled || isEE;
                             return renderNavItem(
                                 item,
                                 hydratedHref,

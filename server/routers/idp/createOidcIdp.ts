@@ -11,7 +11,6 @@ import { idp, idpOidcConfig, idpOrg, orgs } from "@server/db";
 import { generateOidcRedirectUrl } from "@server/lib/idp/generateRedirectUrl";
 import { encrypt } from "@server/lib/crypto";
 import config from "@server/lib/config";
-import license from "@server/license/license";
 
 const paramsSchema = z.object({}).strict();
 
@@ -112,7 +111,7 @@ export async function createOidcIdp(
             });
         });
 
-        const redirectUrl = generateOidcRedirectUrl(idpId as number);
+        const redirectUrl = await generateOidcRedirectUrl(idpId as number);
 
         return response<CreateIdpResponse>(res, {
             data: {

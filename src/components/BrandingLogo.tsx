@@ -1,6 +1,7 @@
 "use client";
 
 import { useEnvContext } from "@app/hooks/useEnvContext";
+import { useLicenseStatusContext } from "@app/hooks/useLicenseStatusContext";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import { useEffect, useState } from "react";
@@ -13,6 +14,7 @@ type BrandingLogoProps = {
 export default function BrandingLogo(props: BrandingLogoProps) {
     const { env } = useEnvContext();
     const { theme } = useTheme();
+    const { isUnlocked } = useLicenseStatusContext();
     const [path, setPath] = useState<string>(""); // Default logo path
 
     useEffect(() => {
@@ -27,10 +29,16 @@ export default function BrandingLogo(props: BrandingLogoProps) {
             }
 
             if (lightOrDark === "light") {
+                if (isUnlocked() && env.branding.logo?.lightPath) {
+                    return env.branding.logo.lightPath;
+                }
                 return "/logo/word_mark_black.png";
             }
 
-            return "/logo/word_mark_white.png";
+            if (isUnlocked() && env.branding.logo?.darkPath) {
+                return env.branding.logo.darkPath;
+            }
+            return  "/logo/word_mark_white.png";
         }
 
         const path = getPath();

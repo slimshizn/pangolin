@@ -4,26 +4,40 @@ import { Inter } from "next/font/google";
 import { ThemeProvider } from "@app/providers/ThemeProvider";
 import EnvProvider from "@app/providers/EnvProvider";
 import { pullEnv } from "@app/lib/pullEnv";
+import ThemeDataProvider from "@app/providers/ThemeDataProvider";
+import SplashImage from "@app/components/private/SplashImage";
 import SupportStatusProvider from "@app/providers/SupporterStatusProvider";
 import { priv } from "@app/lib/api";
 import { AxiosResponse } from "axios";
 import { IsSupporterKeyVisibleResponse } from "@server/routers/supporterKey";
 import LicenseStatusProvider from "@app/providers/LicenseStatusProvider";
-import { GetLicenseStatusResponse } from "@server/routers/license";
+import { GetLicenseStatusResponse } from "@server/routers/license/types";
 import LicenseViolation from "@app/components/LicenseViolation";
 import { cache } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
 import { Toaster } from "@app/components/ui/toaster";
+import { build } from "@server/build";
 
 export const metadata: Metadata = {
-    title: `Dashboard - Pangolin`,
+    title: `Dashboard - ${process.env.BRANDING_APP_NAME || "Pangolin"}`,
     description: "",
+
+    ...(process.env.BRANDING_FAVICON_PATH
+        ? {
+              icons: {
+                  icon: [
+                      {
+                          url: process.env.BRANDING_FAVICON_PATH as string
+                      }
+                  ]
+              }
+          }
+        : {})
 };
 
 export const dynamic = "force-dynamic";
 
-// const font = Figtree({ subsets: ["latin"] });
 const font = Inter({ subsets: ["latin"] });
 
 export default async function RootLayout({
@@ -44,13 +58,28 @@ export default async function RootLayout({
     supporterData.visible = res.data.data.visible;
     supporterData.tier = res.data.data.tier;
 
-    const licenseStatusRes = await cache(
-        async () =>
+    let licenseStatus: GetLicenseStatusResponse;
+    if (build === "enterprise") {
+        const licenseStatusRes = await cache(
+            async () =>
             await priv.get<AxiosResponse<GetLicenseStatusResponse>>(
                 "/license/status"
             )
-    )();
-    const licenseStatus = licenseStatusRes.data.data;
+        )();
+        licenseStatus = licenseStatusRes.data.data;
+    } else if (build === "saas") {
+        licenseStatus = {
+            isHostLicensed: true,
+            isLicenseValid: true,
+            hostId: "saas"
+        };
+    } else {
+        licenseStatus = {
+            isHostLicensed: false,
+            isLicenseValid: false,
+            hostId: ""
+        };
+    }
 
     return (
         <html suppressHydrationWarning lang={locale}>
@@ -62,25 +91,44 @@ export default async function RootLayout({
                         enableSystem
                         disableTransitionOnChange
                     >
-                        <EnvProvider env={pullEnv()}>
-                            <LicenseStatusProvider licenseStatus={licenseStatus}>
-                                <SupportStatusProvider
-                                    supporterStatus={supporterData}
+                        <ThemeDataProvider colors={loadBrandingColors()}>
+                            <EnvProvider env={pullEnv()}>
+                                <LicenseStatusProvider
+                                    licenseStatus={licenseStatus}
                                 >
-                                    {/* Main content */}
-                                    <div className="h-full flex flex-col">
-                                        <div className="flex-1 overflow-auto">
-                                            <LicenseViolation />
-                                            {children}
+                                    <SupportStatusProvider
+                                        supporterStatus={supporterData}
+                                    >
+                                        {/* Main content */}
+                                        <div className="h-full flex flex-col">
+                                            <div className="flex-1 overflow-auto">
+                                                <SplashImage>
+                                                    <LicenseViolation />
+                                                    {children}
+                                                </SplashImage>
+                                                <LicenseViolation />
+                                            </div>
                                         </div>
-                                    </div>
-                                </SupportStatusProvider>
-                            </LicenseStatusProvider>
-                        </EnvProvider>
-                        <Toaster />
+                                    </SupportStatusProvider>
+                                </LicenseStatusProvider>
+                                <Toaster />
+                            </EnvProvider>
+                        </ThemeDataProvider>
                     </ThemeProvider>
                 </NextIntlClientProvider>
             </body>
         </html>
     );
+}
+
+function loadBrandingColors() {
+    // this is loaded once on the server and not included in pullEnv
+    // so we don't need to parse the json every time pullEnv is called
+    if (process.env.BRANDING_COLORS) {
+        try {
+            return JSON.parse(process.env.BRANDING_COLORS);
+        } catch (e) {
+            console.error("Failed to parse BRANDING_COLORS", e);
+        }
+    }
 }

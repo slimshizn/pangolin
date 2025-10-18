@@ -46,7 +46,7 @@ export default async function ResourceLayout(props: ResourceLayoutProps) {
     try {
         const res = await internal.get<
             AxiosResponse<GetResourceAuthInfoResponse>
-        >(`/resource/${resource.resourceId}/auth`, await authCookieHeader());
+        >(`/resource/${resource.resourceGuid}/auth`, await authCookieHeader());
         authInfo = res.data.data;
     } catch {
         redirect(`/${params.orgId}/settings/resources`);

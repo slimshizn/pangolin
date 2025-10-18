@@ -12,6 +12,7 @@ import { OpenAPITags, registry } from "@server/openApi";
 
 const paramsSchema = z
     .object({
+        orgId: z.string().optional(), // Optional; used with org idp in saas
         idpId: z.coerce.number()
     })
     .strict();

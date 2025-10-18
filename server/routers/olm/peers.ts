@@ -1,7 +1,7 @@
 import { db } from "@server/db";
 import { clients, olms, newts, sites } from "@server/db";
 import { eq } from "drizzle-orm";
-import { sendToClient } from "../ws";
+import { sendToClient } from "#dynamic/routers/ws";
 import logger from "@server/logger";
 
 export async function addPeer(
@@ -24,7 +24,7 @@ export async function addPeer(
         throw new Error(`Olm with ID ${clientId} not found`);
     }
 
-    sendToClient(olm.olmId, {
+    await sendToClient(olm.olmId, {
         type: "olm/wg/peer/add",
         data: {
             siteId: peer.siteId,
@@ -49,7 +49,7 @@ export async function deletePeer(clientId: number, siteId: number, publicKey: st
         throw new Error(`Olm with ID ${clientId} not found`);
     }
 
-    sendToClient(olm.olmId, {
+    await sendToClient(olm.olmId, {
         type: "olm/wg/peer/remove",
         data: {
             publicKey,
@@ -80,7 +80,7 @@ export async function updatePeer(
         throw new Error(`Olm with ID ${clientId} not found`);
     }
 
-    sendToClient(olm.olmId, {
+    await sendToClient(olm.olmId, {
         type: "olm/wg/peer/update",
         data: {
             siteId: peer.siteId,

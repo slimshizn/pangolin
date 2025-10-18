@@ -24,7 +24,7 @@ import { hashPassword } from "@server/auth/password";
 import { isValidCIDR, isValidIP } from "@server/lib/validators";
 import { isIpInCidr } from "@server/lib/ip";
 import { OpenAPITags, registry } from "@server/openApi";
-import { listExitNodes } from "@server/lib/exitNodes";
+import { listExitNodes } from "#dynamic/lib/exitNodes";
 
 const createClientParamsSchema = z
     .object({

@@ -21,7 +21,6 @@ export * from "./verifyIsLoggedInUser";
 export * from "./verifyIsLoggedInUser";
 export * from "./verifyClientAccess";
 export * from "./integration";
-export * from "./verifyValidLicense";
 export * from "./verifyUserHasAction";
 export * from "./verifyApiKeyAccess";
 export * from "./verifyDomainAccess";

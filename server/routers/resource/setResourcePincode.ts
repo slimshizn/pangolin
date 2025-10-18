@@ -7,7 +7,7 @@ import HttpCode from "@server/types/HttpCode";
 import createHttpError from "http-errors";
 import { fromError } from "zod-validation-error";
 import { hash } from "@node-rs/argon2";
-import { response } from "@server/lib";
+import { response } from "@server/lib/response";
 import stoi from "@server/lib/stoi";
 import logger from "@server/logger";
 import { hashPassword } from "@server/auth/password";

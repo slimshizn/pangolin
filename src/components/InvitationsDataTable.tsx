@@ -9,11 +9,15 @@ import { useTranslations } from 'next-intl';
 interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
     data: TData[];
+    onRefresh?: () => void;
+    isRefreshing?: boolean;
 }
 
 export function InvitationsDataTable<TData, TValue>({
     columns,
-    data
+    data,
+    onRefresh,
+    isRefreshing
 }: DataTableProps<TData, TValue>) {
 
     const t = useTranslations();
@@ -26,6 +30,8 @@ export function InvitationsDataTable<TData, TValue>({
             title={t('invite')}
             searchPlaceholder={t('inviteSearch')}
             searchColumn="email"
+            onRefresh={onRefresh}
+            isRefreshing={isRefreshing}
         />
     );
 }

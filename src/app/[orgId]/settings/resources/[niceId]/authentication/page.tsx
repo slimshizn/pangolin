@@ -13,7 +13,7 @@ import {
     ListResourceUsersResponse
 } from "@server/routers/resource";
 import { Button } from "@app/components/ui/button";
-import { set, z } from "zod";
+import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -26,9 +26,10 @@ import {
     FormMessage
 } from "@app/components/ui/form";
 import { ListUsersResponse } from "@server/routers/user";
-import { Binary, Key } from "lucide-react";
+import { Binary, Key, Bot } from "lucide-react";
 import SetResourcePasswordForm from "../../../../../../components/SetResourcePasswordForm";
 import SetResourcePincodeForm from "../../../../../../components/SetResourcePincodeForm";
+import SetResourceHeaderAuthForm from "../../../../../../components/SetResourceHeaderAuthForm";
 import { createApiClient } from "@app/lib/api";
 import { useEnvContext } from "@app/hooks/useEnvContext";
 import {
@@ -58,6 +59,9 @@ import {
     SelectValue
 } from "@app/components/ui/select";
 import { Separator } from "@app/components/ui/separator";
+import { build } from "@server/build";
+import { useSubscriptionStatusContext } from "@app/hooks/useSubscriptionStatusContext";
+import { TierId } from "@server/lib/billing/tiers";
 
 const UsersRolesFormSchema = z.object({
     roles: z.array(
@@ -93,6 +97,8 @@ export default function ResourceAuthenticationPage() {
     const api = createApiClient({ env });
     const router = useRouter();
     const t = useTranslations();
+
+    const subscription = useSubscriptionStatusContext();
 
     const [pageLoading, setPageLoading] = useState(true);
 
@@ -134,9 +140,14 @@ export default function ResourceAuthenticationPage() {
         useState(false);
     const [loadingRemoveResourcePincode, setLoadingRemoveResourcePincode] =
         useState(false);
+    const [
+        loadingRemoveResourceHeaderAuth,
+        setLoadingRemoveResourceHeaderAuth
+    ] = useState(false);
 
     const [isSetPasswordOpen, setIsSetPasswordOpen] = useState(false);
     const [isSetPincodeOpen, setIsSetPincodeOpen] = useState(false);
+    const [isSetHeaderAuthOpen, setIsSetHeaderAuthOpen] = useState(false);
 
     const usersRolesForm = useForm({
         resolver: zodResolver(UsersRolesFormSchema),
@@ -178,7 +189,7 @@ export default function ResourceAuthenticationPage() {
                         AxiosResponse<{
                             idps: { idpId: number; name: string }[];
                         }>
-                    >("/idp")
+                    >(build === "saas" ? `/org/${org?.org.orgId}/idp` : "/idp")
                 ]);
 
                 setAllRoles(
@@ -223,12 +234,23 @@ export default function ResourceAuthenticationPage() {
                     }))
                 );
 
-                setAllIdps(
-                    idpsResponse.data.data.idps.map((idp) => ({
-                        id: idp.idpId,
-                        text: idp.name
-                    }))
-                );
+                if (build === "saas") {
+                    if (subscription?.subscribed) {
+                        setAllIdps(
+                            idpsResponse.data.data.idps.map((idp) => ({
+                                id: idp.idpId,
+                                text: idp.name
+                            }))
+                        );
+                    }
+                } else {
+                    setAllIdps(
+                        idpsResponse.data.data.idps.map((idp) => ({
+                            id: idp.idpId,
+                            text: idp.name
+                        }))
+                    );
+                }
 
                 if (
                     autoLoginEnabled &&
@@ -412,6 +434,37 @@ export default function ResourceAuthenticationPage() {
             .finally(() => setLoadingRemoveResourcePincode(false));
     }
 
+    function removeResourceHeaderAuth() {
+        setLoadingRemoveResourceHeaderAuth(true);
+
+        api.post(`/resource/${resource.resourceId}/header-auth`, {
+            user: null,
+            password: null
+        })
+            .then(() => {
+                toast({
+                    title: t("resourceHeaderAuthRemove"),
+                    description: t("resourceHeaderAuthRemoveDescription")
+                });
+
+                updateAuthInfo({
+                    headerAuth: false
+                });
+                router.refresh();
+            })
+            .catch((e) => {
+                toast({
+                    variant: "destructive",
+                    title: t("resourceErrorHeaderAuthRemove"),
+                    description: formatAxiosError(
+                        e,
+                        t("resourceErrorHeaderAuthRemoveDescription")
+                    )
+                });
+            })
+            .finally(() => setLoadingRemoveResourceHeaderAuth(false));
+    }
+
     if (pageLoading) {
         return <></>;
     }
@@ -441,6 +494,20 @@ export default function ResourceAuthenticationPage() {
                         setIsSetPincodeOpen(false);
                         updateAuthInfo({
                             pincode: true
+                        });
+                    }}
+                />
+            )}
+
+            {isSetHeaderAuthOpen && (
+                <SetResourceHeaderAuthForm
+                    open={isSetHeaderAuthOpen}
+                    setOpen={setIsSetHeaderAuthOpen}
+                    resourceId={resource.resourceId}
+                    onSetHeaderAuth={() => {
+                        setIsSetHeaderAuthOpen(false);
+                        updateAuthInfo({
+                            headerAuth: true
                         });
                     }}
                 />
@@ -759,6 +826,36 @@ export default function ResourceAuthenticationPage() {
                                     {authInfo.pincode
                                         ? t("pincodeRemove")
                                         : t("pincodeAdd")}
+                                </Button>
+                            </div>
+
+                            {/* Header Authentication Protection */}
+                            <div className="flex items-center justify-between border rounded-md p-2">
+                                <div
+                                    className={`flex items-center ${!authInfo.headerAuth ? "text-muted-foreground" : "text-green-500"} space-x-2 text-sm`}
+                                >
+                                    <Bot size="14" />
+                                    <span>
+                                        {authInfo.headerAuth
+                                            ? t("resourceHeaderAuthProtectionEnabled")
+                                            : t(
+                                                  "resourceHeaderAuthProtectionDisabled"
+                                              )}
+                                    </span>
+                                </div>
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={
+                                        authInfo.headerAuth
+                                            ? removeResourceHeaderAuth
+                                            : () => setIsSetHeaderAuthOpen(true)
+                                    }
+                                    loading={loadingRemoveResourceHeaderAuth}
+                                >
+                                    {authInfo.headerAuth
+                                        ? t("headerAuthRemove")
+                                        : t("headerAuthAdd")}
                                 </Button>
                             </div>
                         </SettingsSectionForm>

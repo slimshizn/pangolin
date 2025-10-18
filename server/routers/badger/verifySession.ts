@@ -7,20 +7,21 @@ import {
 import { verifyResourceAccessToken } from "@server/auth/verifyResourceAccessToken";
 import {
     getResourceByDomain,
-    getUserSessionWithUser,
-    getUserOrgRole,
+    getResourceRules,
     getRoleResourceAccess,
+    getUserOrgRole,
     getUserResourceAccess,
-    getResourceRules
+    getOrgLoginPage,
+    getUserSessionWithUser
 } from "@server/db/queries/verifySessionQueries";
 import {
+    LoginPage,
     Resource,
     ResourceAccessToken,
+    ResourceHeaderAuth,
     ResourcePassword,
     ResourcePincode,
-    ResourceRule,
-    sessions,
-    users
+    ResourceRule
 } from "@server/db";
 import config from "@server/lib/config";
 import { isIpInCidr } from "@server/lib/ip";
@@ -32,7 +33,10 @@ import createHttpError from "http-errors";
 import NodeCache from "node-cache";
 import { z } from "zod";
 import { fromError } from "zod-validation-error";
-import { getCountryCodeForIp } from "@server/lib";
+import { getCountryCodeForIp } from "@server/lib/geoip";
+import { getOrgTierData } from "#dynamic/lib/billing";
+import { TierId } from "@server/lib/billing/tiers";
+import { verifyPassword } from "@server/auth/password";
 
 // We'll see if this speeds anything up
 const cache = new NodeCache({
@@ -97,6 +101,9 @@ export async function verifyResourceSession(
             query
         } = parsedBody.data;
 
+        // Extract HTTP Basic Auth credentials if present
+        const clientHeaderAuth = extractBasicAuth(headers);
+
         const clientIp = requestIp
             ? (() => {
                   logger.debug("Request IP:", { requestIp });
@@ -133,6 +140,7 @@ export async function verifyResourceSession(
                   resource: Resource | null;
                   pincode: ResourcePincode | null;
                   password: ResourcePassword | null;
+                  headerAuth: ResourceHeaderAuth | null;
               }
             | undefined = cache.get(resourceCacheKey);
 
@@ -148,7 +156,7 @@ export async function verifyResourceSession(
             cache.set(resourceCacheKey, resourceData);
         }
 
-        const { resource, pincode, password } = resourceData;
+        const { resource, pincode, password, headerAuth } = resourceData;
 
         if (!resource) {
             logger.debug(`Resource not found ${cleanHost}`);
@@ -186,27 +194,20 @@ export async function verifyResourceSession(
             // otherwise its undefined and we pass
         }
 
+        // IMPORTANT: ADD NEW AUTH CHECKS HERE OR WHEN TURNING OFF ALL OTHER AUTH METHODS IT WILL JUST PASS
         if (
-            !resource.sso &&
+            !sso &&
             !pincode &&
             !password &&
-            !resource.emailWhitelistEnabled
+            !resource.emailWhitelistEnabled &&
+            !headerAuth
         ) {
             logger.debug("Resource allowed because no auth");
             return allowed(res);
         }
 
-        let endpoint: string;
-        if (config.isManagedMode()) {
-            endpoint =
-                config.getRawConfig().managed?.redirect_endpoint ||
-                config.getRawConfig().managed?.endpoint ||
-                "";
-        } else {
-            endpoint = config.getRawConfig().app.dashboard_url!;
-        }
-        const redirectUrl = `${endpoint}/auth/resource/${encodeURIComponent(
-            resource.resourceId
+        const redirectPath = `/auth/resource/${encodeURIComponent(
+            resource.resourceGuid
         )}?redirect=${encodeURIComponent(originalRequestURL)}`;
 
         // check for access token in headers
@@ -290,6 +291,45 @@ export async function verifyResourceSession(
 
             if (valid && tokenItem) {
                 return allowed(res);
+            }
+        }
+
+        // check for HTTP Basic Auth header
+        const clientHeaderAuthKey = `headerAuth:${clientHeaderAuth}`;
+        if (headerAuth && clientHeaderAuth) {
+            if (cache.get(clientHeaderAuthKey)) {
+                logger.debug(
+                    "Resource allowed because header auth is valid (cached)"
+                );
+                return allowed(res);
+            } else if (
+                await verifyPassword(
+                    clientHeaderAuth,
+                    headerAuth.headerAuthHash
+                )
+            ) {
+                cache.set(clientHeaderAuthKey, clientHeaderAuth);
+                logger.debug("Resource allowed because header auth is valid");
+                return allowed(res);
+            }
+
+            if ( // we dont want to redirect if this is the only auth method and we did not pass here
+                !sso &&
+                !pincode &&
+                !password &&
+                !resource.emailWhitelistEnabled
+            ) {
+                return notAllowed(res);
+            }
+        } else if (headerAuth) {
+            // if there are no other auth methods we need to return unauthorized if nothing is provided
+            if (
+                !sso &&
+                !pincode &&
+                !password &&
+                !resource.emailWhitelistEnabled
+            ) {
+                return notAllowed(res);
             }
         }
 
@@ -408,7 +448,10 @@ export async function verifyResourceSession(
                 }. IP: ${clientIp}.`
             );
         }
-        return notAllowed(res, redirectUrl);
+
+        logger.debug(`Redirecting to login at ${redirectPath}`);
+
+        return notAllowed(res, redirectPath, resource.orgId);
     } catch (e) {
         console.error(e);
         return next(
@@ -463,7 +506,35 @@ function extractResourceSessionToken(
     return latest.token;
 }
 
-function notAllowed(res: Response, redirectUrl?: string) {
+async function notAllowed(
+    res: Response,
+    redirectPath?: string,
+    orgId?: string
+) {
+    let loginPage: LoginPage | null = null;
+    if (orgId) {
+        const { tier } = await getOrgTierData(orgId); // returns null in oss
+        if (tier === TierId.STANDARD) {
+            loginPage = await getOrgLoginPage(orgId);
+        }
+    }
+
+    let redirectUrl: string | undefined = undefined;
+    if (redirectPath) {
+        let endpoint: string;
+
+        if (loginPage && loginPage.domainId && loginPage.fullDomain) {
+            const secure = config
+                .getRawConfig()
+                .app.dashboard_url?.startsWith("https");
+            const method = secure ? "https" : "http";
+            endpoint = `${method}://${loginPage.fullDomain}`;
+        } else {
+            endpoint = config.getRawConfig().app.dashboard_url!;
+        }
+        redirectUrl = `${endpoint}${redirectPath}`;
+    }
+
     const data = {
         data: { valid: false, redirectUrl },
         success: true,
@@ -487,39 +558,6 @@ function allowed(res: Response, userData?: BasicUserData) {
         status: HttpCode.OK
     };
     return response<VerifyUserResponse>(res, data);
-}
-
-async function createAccessTokenSession(
-    res: Response,
-    resource: Resource,
-    tokenItem: ResourceAccessToken
-) {
-    const token = generateSessionToken();
-    const sess = await createResourceSession({
-        resourceId: resource.resourceId,
-        token,
-        accessTokenId: tokenItem.accessTokenId,
-        sessionLength: tokenItem.sessionLength,
-        expiresAt: tokenItem.expiresAt,
-        doNotExtend: tokenItem.expiresAt ? true : false
-    });
-    const cookieName = `${config.getRawConfig().server.session_cookie_name}`;
-    const cookie = serializeResourceSessionCookie(
-        cookieName,
-        resource.fullDomain!,
-        token,
-        !resource.ssl,
-        new Date(sess.expiresAt)
-    );
-    res.appendHeader("Set-Cookie", cookie);
-    logger.debug("Access token is valid, creating new session");
-    return response<VerifyUserResponse>(res, {
-        data: { valid: true },
-        success: true,
-        error: false,
-        message: "Access allowed",
-        status: HttpCode.OK
-    });
 }
 
 async function isUserAllowedToAccessResource(
@@ -762,7 +800,7 @@ async function isIpInGeoIP(ip: string, countryCode: string): Promise<boolean> {
     let cachedCountryCode: string | undefined = cache.get(geoIpCacheKey);
 
     if (!cachedCountryCode) {
-        cachedCountryCode = await getCountryCodeForIp(ip);
+        cachedCountryCode = await getCountryCodeForIp(ip); // do it locally
         // Cache for longer since IP geolocation doesn't change frequently
         cache.set(geoIpCacheKey, cachedCountryCode, 300); // 5 minutes
     }
@@ -770,4 +808,29 @@ async function isIpInGeoIP(ip: string, countryCode: string): Promise<boolean> {
     logger.debug(`IP ${ip} is in country: ${cachedCountryCode}`);
 
     return cachedCountryCode?.toUpperCase() === countryCode.toUpperCase();
+}
+
+function extractBasicAuth(
+    headers: Record<string, string> | undefined
+): string | undefined {
+    if (!headers || (!headers.authorization && !headers.Authorization)) {
+        return;
+    }
+
+    const authHeader = headers.authorization || headers.Authorization;
+
+    // Check if it's Basic Auth
+    if (!authHeader.startsWith("Basic ")) {
+        logger.debug("Authorization header is not Basic Auth");
+        return;
+    }
+
+    try {
+        // Extract the base64 encoded credentials
+        return authHeader.slice("Basic ".length);
+    } catch (error) {
+        logger.debug("Basic Auth: Failed to decode credentials", {
+            error: error instanceof Error ? error.message : "Unknown error"
+        });
+    }
 }

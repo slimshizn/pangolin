@@ -33,16 +33,20 @@ interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
     data: TData[];
     addApiKey?: () => void;
+    onRefresh?: () => void;
+    isRefreshing?: boolean;
 }
 
 export function ApiKeysDataTable<TData, TValue>({
     addApiKey,
     columns,
-    data
+    data,
+    onRefresh,
+    isRefreshing
 }: DataTableProps<TData, TValue>) {
 
     const t = useTranslations();
-    
+
     return (
         <DataTable
             columns={columns}
@@ -53,6 +57,8 @@ export function ApiKeysDataTable<TData, TValue>({
             searchColumn="name"
             onAdd={addApiKey}
             addButtonText={t('apiKeysAdd')}
+            onRefresh={onRefresh}
+            isRefreshing={isRefreshing}
         />
     );
 }

@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { db } from "@server/db";
 import {
+    db,
+    resourceHeaderAuth,
     resourcePassword,
     resourcePincode,
     resources
@@ -12,21 +13,22 @@ import HttpCode from "@server/types/HttpCode";
 import createHttpError from "http-errors";
 import { fromError } from "zod-validation-error";
 import logger from "@server/logger";
+import { build } from "@server/build";
 
 const getResourceAuthInfoSchema = z
     .object({
-        resourceId: z
-            .string()
-            .transform(Number)
-            .pipe(z.number().int().positive())
+        resourceGuid: z.string()
     })
     .strict();
 
 export type GetResourceAuthInfoResponse = {
     resourceId: number;
+    resourceGuid: string;
     resourceName: string;
+    niceId: string;
     password: boolean;
     pincode: boolean;
+    headerAuth: boolean;
     sso: boolean;
     blockAccess: boolean;
     url: string;
@@ -51,40 +53,77 @@ export async function getResourceAuthInfo(
             );
         }
 
-        const { resourceId } = parsedParams.data;
+        const { resourceGuid } = parsedParams.data;
 
-        const [result] = await db
-            .select()
-            .from(resources)
-            .leftJoin(
-                resourcePincode,
-                eq(resourcePincode.resourceId, resources.resourceId)
-            )
-            .leftJoin(
-                resourcePassword,
-                eq(resourcePassword.resourceId, resources.resourceId)
-            )
-            .where(eq(resources.resourceId, resourceId))
-            .limit(1);
+        const isGuidInteger = /^\d+$/.test(resourceGuid);
+
+        const [result] =
+            isGuidInteger && build === "saas"
+                ? await db
+                      .select()
+                      .from(resources)
+                      .leftJoin(
+                          resourcePincode,
+                          eq(resourcePincode.resourceId, resources.resourceId)
+                      )
+                      .leftJoin(
+                          resourcePassword,
+                          eq(resourcePassword.resourceId, resources.resourceId)
+                      )
+
+                      .leftJoin(
+                          resourceHeaderAuth,
+                          eq(
+                              resourceHeaderAuth.resourceId,
+                              resources.resourceId
+                          )
+                      )
+                      .where(eq(resources.resourceId, Number(resourceGuid)))
+                      .limit(1)
+                : await db
+                      .select()
+                      .from(resources)
+                      .leftJoin(
+                          resourcePincode,
+                          eq(resourcePincode.resourceId, resources.resourceId)
+                      )
+                      .leftJoin(
+                          resourcePassword,
+                          eq(resourcePassword.resourceId, resources.resourceId)
+                      )
+
+                      .leftJoin(
+                          resourceHeaderAuth,
+                          eq(
+                              resourceHeaderAuth.resourceId,
+                              resources.resourceId
+                          )
+                      )
+                      .where(eq(resources.resourceGuid, resourceGuid))
+                      .limit(1);
 
         const resource = result?.resources;
-        const pincode = result?.resourcePincode;
-        const password = result?.resourcePassword;
-
-        const url = `${resource.ssl ? "https" : "http"}://${resource.fullDomain}`;
-
         if (!resource) {
             return next(
                 createHttpError(HttpCode.NOT_FOUND, "Resource not found")
             );
         }
 
+        const pincode = result?.resourcePincode;
+        const password = result?.resourcePassword;
+        const headerAuth = result?.resourceHeaderAuth;
+
+        const url = `${resource.ssl ? "https" : "http"}://${resource.fullDomain}`;
+
         return response<GetResourceAuthInfoResponse>(res, {
             data: {
+                niceId: resource.niceId,
+                resourceGuid: resource.resourceGuid,
                 resourceId: resource.resourceId,
                 resourceName: resource.name,
                 password: password !== null,
                 pincode: pincode !== null,
+                headerAuth: headerAuth !== null,
                 sso: resource.sso,
                 blockAccess: resource.blockAccess,
                 url,

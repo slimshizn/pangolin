@@ -5,18 +5,30 @@ import { runSetupFunctions } from "./setup";
 import { createApiServer } from "./apiServer";
 import { createNextServer } from "./nextServer";
 import { createInternalServer } from "./internalServer";
-import { ApiKey, ApiKeyOrg, Session, User, UserOrg } from "@server/db";
+import {
+    ApiKey,
+    ApiKeyOrg,
+    RemoteExitNode,
+    Session,
+    User,
+    UserOrg
+} from "@server/db";
 import { createIntegrationApiServer } from "./integrationApiServer";
-import { createHybridClientServer } from "./hybridServer";
 import config from "@server/lib/config";
 import { setHostMeta } from "@server/lib/hostMeta";
 import { initTelemetryClient } from "./lib/telemetry.js";
-import { TraefikConfigManager } from "./lib/traefikConfig.js";
+import { TraefikConfigManager } from "./lib/traefik/TraefikConfigManager.js";
+import { initCleanup } from "#dynamic/cleanup";
+import license from "#dynamic/license/license";
 
 async function startServers() {
     await setHostMeta();
 
     await config.initServer();
+
+    license.setServerSecret(config.getRawConfig().server.secret!);
+    await license.check();
+
     await runSetupFunctions();
 
     initTelemetryClient();
@@ -25,16 +37,11 @@ async function startServers() {
     const apiServer = createApiServer();
     const internalServer = createInternalServer();
 
-    let hybridClientServer;
     let nextServer;
-    if (config.isManagedMode()) {
-        hybridClientServer = await createHybridClientServer();
-    } else {
-        nextServer = await createNextServer();
-        if (config.getRawConfig().traefik.file_mode) {
-            const monitor = new TraefikConfigManager();
-            await monitor.start();
-        }
+    nextServer = await createNextServer();
+    if (config.getRawConfig().traefik.file_mode) {
+        const monitor = new TraefikConfigManager();
+        await monitor.start();
     }
 
     let integrationServer;
@@ -42,12 +49,13 @@ async function startServers() {
         integrationServer = createIntegrationApiServer();
     }
 
+    await initCleanup();
+
     return {
         apiServer,
         nextServer,
         internalServer,
-        integrationServer,
-        hybridClientServer
+        integrationServer
     };
 }
 
@@ -63,6 +71,7 @@ declare global {
             userOrgRoleId?: number;
             userOrgId?: string;
             userOrgIds?: string[];
+            remoteExitNode?: RemoteExitNode;
         }
     }
 }

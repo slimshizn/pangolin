@@ -25,6 +25,7 @@ import { toast } from "@app/hooks/useToast";
 import { formatAxiosError } from "@app/lib/api";
 import { createApiClient } from "@app/lib/api";
 import { useEnvContext } from "@app/hooks/useEnvContext";
+import { useTranslations } from "next-intl";
 
 export type ClientRow = {
     id: number;
@@ -53,6 +54,25 @@ export default function ClientsTable({ clients, orgId }: ClientTableProps) {
     const [rows, setRows] = useState<ClientRow[]>(clients);
 
     const api = createApiClient(useEnvContext());
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const t = useTranslations();
+
+    const refreshData = async () => {
+        console.log("Data refreshed");
+        setIsRefreshing(true);
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            router.refresh();
+        } catch (error) {
+            toast({
+                title: t("error"),
+                description: t("refreshError"),
+                variant: "destructive"
+            });
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
 
     const deleteClient = (clientId: number) => {
         api.delete(`/client/${clientId}`)
@@ -207,32 +227,32 @@ export default function ClientsTable({ clients, orgId }: ClientTableProps) {
                 return (
                     <div className="flex items-center justify-end">
 
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                                <span className="sr-only">Open menu</span>
-                                <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            {/* <Link */}
-                            {/*     className="block w-full" */}
-                            {/*     href={`/${clientRow.orgId}/settings/sites/${clientRow.nice}`} */}
-                            {/* > */}
-                            {/*     <DropdownMenuItem> */}
-                            {/*         View settings */}
-                            {/*     </DropdownMenuItem> */}
-                            {/* </Link> */}
-                            <DropdownMenuItem
-                                onClick={() => {
-                                    setSelectedClient(clientRow);
-                                    setIsDeleteModalOpen(true);
-                                }}
-                            >
-                                <span className="text-red-500">Delete</span>
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                    <span className="sr-only">Open menu</span>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                {/* <Link */}
+                                {/*     className="block w-full" */}
+                                {/*     href={`/${clientRow.orgId}/settings/sites/${clientRow.nice}`} */}
+                                {/* > */}
+                                {/*     <DropdownMenuItem> */}
+                                {/*         View settings */}
+                                {/*     </DropdownMenuItem> */}
+                                {/* </Link> */}
+                                <DropdownMenuItem
+                                    onClick={() => {
+                                        setSelectedClient(clientRow);
+                                        setIsDeleteModalOpen(true);
+                                    }}
+                                >
+                                    <span className="text-red-500">Delete</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                         <Link
                             href={`/${clientRow.orgId}/settings/clients/${clientRow.id}`}
                         >
@@ -292,6 +312,8 @@ export default function ClientsTable({ clients, orgId }: ClientTableProps) {
                 addClient={() => {
                     router.push(`/${orgId}/settings/clients/create`);
                 }}
+                onRefresh={refreshData}
+                isRefreshing={isRefreshing}
             />
         </>
     );

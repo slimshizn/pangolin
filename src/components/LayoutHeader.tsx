@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import ProfileIcon from "@app/components/ProfileIcon";
 import ThemeSwitcher from "@app/components/ThemeSwitcher";
 import { useTheme } from "next-themes";
+import BrandingLogo from "./BrandingLogo";
+import { useEnvContext } from "@app/hooks/useEnvContext";
+import { useLicenseStatusContext } from "@app/hooks/useLicenseStatusContext";
 
 interface LayoutHeaderProps {
     showTopBar: boolean;
@@ -14,6 +16,15 @@ interface LayoutHeaderProps {
 export function LayoutHeader({ showTopBar }: LayoutHeaderProps) {
     const { theme } = useTheme();
     const [path, setPath] = useState<string>("");
+    const { env } = useEnvContext();
+    const { isUnlocked } = useLicenseStatusContext();
+
+    const logoWidth = isUnlocked()
+        ? env.branding.logo?.navbar?.width || 98
+        : 98;
+    const logoHeight = isUnlocked()
+        ? env.branding.logo?.navbar?.height || 32
+        : 32;
 
     useEffect(() => {
         function getPath() {
@@ -44,16 +55,14 @@ export function LayoutHeader({ showTopBar }: LayoutHeaderProps) {
                     <div className="h-16 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Link href="/" className="flex items-center">
-                                {path && (
-                                    <Image
-                                        src={path}
-                                        alt="Pangolin"
-                                        width={98}
-                                        height={32}
-                                        className="h-8 w-auto"
-                                    />
-                                )}
+                                <BrandingLogo
+                                    width={logoWidth}
+                                    height={logoHeight}
+                                />
                             </Link>
+                            {/* {build === "saas" && (
+                                <Badge variant="secondary">Cloud Beta</Badge>
+                            )} */}
                         </div>
 
                         {showTopBar && (

@@ -1,5 +1,5 @@
 import NodeCache from "node-cache";
-import { sendToClient } from "../ws";
+import { sendToClient } from "#dynamic/routers/ws";
 
 export const dockerSocketCache = new NodeCache({
     stdTTL: 3600 // seconds

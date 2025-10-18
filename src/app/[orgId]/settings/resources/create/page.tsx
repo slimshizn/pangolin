@@ -25,7 +25,6 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Input } from "@app/components/ui/input";
 import { Button } from "@app/components/ui/button";
-import { Checkbox } from "@app/components/ui/checkbox";
 import { useParams, useRouter } from "next/navigation";
 import { ListSitesResponse } from "@server/routers/site";
 import { formatAxiosError } from "@app/lib/api";
@@ -58,7 +57,16 @@ import {
 } from "@app/components/ui/popover";
 import { CaretSortIcon, CheckIcon } from "@radix-ui/react-icons";
 import { cn } from "@app/lib/cn";
-import { ArrowRight, MoveRight, SquareArrowOutUpRight } from "lucide-react";
+import {
+    ArrowRight,
+    CircleCheck,
+    CircleX,
+    Info,
+    MoveRight,
+    Plus,
+    Settings,
+    SquareArrowOutUpRight
+} from "lucide-react";
 import CopyTextBox from "@app/components/CopyTextBox";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -89,10 +97,24 @@ import { isTargetValid } from "@server/lib/validators";
 import { ListTargetsResponse } from "@server/routers/target";
 import { DockerManager, DockerState } from "@app/lib/docker";
 import { parseHostTarget } from "@app/lib/parseHostTarget";
-import { toASCII, toUnicode } from 'punycode';
+import { toASCII, toUnicode } from "punycode";
 import { DomainRow } from "../../../../../components/DomainsTable";
 import { finalizeSubdomainSanitize } from "@app/lib/subdomain-utils";
-
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger
+} from "@app/components/ui/tooltip";
+import {
+    PathMatchDisplay,
+    PathMatchModal,
+    PathRewriteDisplay,
+    PathRewriteModal
+} from "@app/components/PathMatchRenameModal";
+import { Badge } from "@app/components/ui/badge";
+import HealthCheckDialog from "@app/components/HealthCheckDialog";
+import { SwitchInput } from "@app/components/SwitchInput";
 
 const baseResourceFormSchema = z.object({
     name: z.string().min(1).max(255),
@@ -110,46 +132,73 @@ const tcpUdpResourceFormSchema = z.object({
     // enableProxy: z.boolean().default(false)
 });
 
-const addTargetSchema = z.object({
-    ip: z.string().refine(isTargetValid),
-    method: z.string().nullable(),
-    port: z.coerce.number().int().positive(),
-    siteId: z.number().int().positive(),
-    path: z.string().optional().nullable(),
-    pathMatchType: z.enum(["exact", "prefix", "regex"]).optional().nullable()
-}).refine(
-    (data) => {
-        // If path is provided, pathMatchType must be provided
-        if (data.path && !data.pathMatchType) {
-            return false;
-        }
-        // If pathMatchType is provided, path must be provided
-        if (data.pathMatchType && !data.path) {
-            return false;
-        }
-        // Validate path based on pathMatchType
-        if (data.path && data.pathMatchType) {
-            switch (data.pathMatchType) {
-                case "exact":
-                case "prefix":
-                    // Path should start with /
-                    return data.path.startsWith("/");
-                case "regex":
-                    // Validate regex
-                    try {
-                        new RegExp(data.path);
-                        return true;
-                    } catch {
-                        return false;
-                    }
+const addTargetSchema = z
+    .object({
+        ip: z.string().refine(isTargetValid),
+        method: z.string().nullable(),
+        port: z.coerce.number().int().positive(),
+        siteId: z.number().int().positive(),
+        path: z.string().optional().nullable(),
+        pathMatchType: z
+            .enum(["exact", "prefix", "regex"])
+            .optional()
+            .nullable(),
+        rewritePath: z.string().optional().nullable(),
+        rewritePathType: z
+            .enum(["exact", "prefix", "regex", "stripPrefix"])
+            .optional()
+            .nullable(),
+        priority: z.number().int().min(1).max(1000).optional()
+    })
+    .refine(
+        (data) => {
+            // If path is provided, pathMatchType must be provided
+            if (data.path && !data.pathMatchType) {
+                return false;
             }
+            // If pathMatchType is provided, path must be provided
+            if (data.pathMatchType && !data.path) {
+                return false;
+            }
+            // Validate path based on pathMatchType
+            if (data.path && data.pathMatchType) {
+                switch (data.pathMatchType) {
+                    case "exact":
+                    case "prefix":
+                        // Path should start with /
+                        return data.path.startsWith("/");
+                    case "regex":
+                        // Validate regex
+                        try {
+                            new RegExp(data.path);
+                            return true;
+                        } catch {
+                            return false;
+                        }
+                }
+            }
+            return true;
+        },
+        {
+            message: "Invalid path configuration"
         }
-        return true;
-    },
-    {
-        message: "Invalid path configuration"
-    }
-);
+    )
+    .refine(
+        (data) => {
+            // If rewritePath is provided, rewritePathType must be provided
+            if (data.rewritePath && !data.rewritePathType) {
+                return false;
+            }
+            // If rewritePathType is provided, rewritePath must be provided
+            if (data.rewritePathType && !data.rewritePath) {
+                return false;
+            }
+            return true;
+        },
+        {
+            message: "Invalid rewrite path configuration"
+        }
+    );
 
 type BaseResourceFormValues = z.infer<typeof baseResourceFormSchema>;
 type HttpResourceFormValues = z.infer<typeof httpResourceFormSchema>;
@@ -187,12 +236,74 @@ export default function Page() {
     >([]);
     const [createLoading, setCreateLoading] = useState(false);
     const [showSnippets, setShowSnippets] = useState(false);
-    const [resourceId, setResourceId] = useState<number | null>(null);
+    const [niceId, setNiceId] = useState<string>("");
 
     // Target management state
     const [targets, setTargets] = useState<LocalTarget[]>([]);
     const [targetsToRemove, setTargetsToRemove] = useState<number[]>([]);
-    const [dockerStates, setDockerStates] = useState<Map<number, DockerState>>(new Map());
+    const [dockerStates, setDockerStates] = useState<Map<number, DockerState>>(
+        new Map()
+    );
+
+    const [selectedTargetForHealthCheck, setSelectedTargetForHealthCheck] =
+        useState<LocalTarget | null>(null);
+    const [healthCheckDialogOpen, setHealthCheckDialogOpen] = useState(false);
+
+    const [isAdvancedMode, setIsAdvancedMode] = useState(() => {
+        if (typeof window !== "undefined") {
+            const saved = localStorage.getItem("create-advanced-mode");
+            return saved === "true";
+        }
+        return false;
+    });
+
+    // Save advanced mode preference to localStorage
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            localStorage.setItem(
+                "create-advanced-mode",
+                isAdvancedMode.toString()
+            );
+        }
+    }, [isAdvancedMode]);
+
+    function addNewTarget() {
+        const isHttp = baseForm.watch("http");
+
+        const newTarget: LocalTarget = {
+            targetId: -Date.now(), // Use negative timestamp as temporary ID
+            ip: "",
+            method: isHttp ? "http" : null,
+            port: 0,
+            siteId: sites.length > 0 ? sites[0].siteId : 0,
+            path: isHttp ? null : null,
+            pathMatchType: isHttp ? null : null,
+            rewritePath: isHttp ? null : null,
+            rewritePathType: isHttp ? null : null,
+            priority: isHttp ? 100 : 100,
+            enabled: true,
+            resourceId: 0,
+            hcEnabled: false,
+            hcPath: null,
+            hcMethod: null,
+            hcInterval: null,
+            hcTimeout: null,
+            hcHeaders: null,
+            hcScheme: null,
+            hcHostname: null,
+            hcPort: null,
+            hcFollowRedirects: null,
+            hcHealth: "unknown",
+            hcStatus: null,
+            hcMode: null,
+            hcUnhealthyInterval: null,
+            siteType: sites.length > 0 ? sites[0].type : null,
+            new: true,
+            updated: false
+        };
+
+        setTargets((prev) => [...prev, newTarget]);
+    }
 
     const resourceTypes: ReadonlyArray<ResourceTypeOption> = [
         {
@@ -203,12 +314,12 @@ export default function Page() {
         ...(!env.flags.allowRawResources
             ? []
             : [
-                {
-                    id: "raw" as ResourceType,
-                    title: t("resourceRaw"),
-                    description: t("resourceRawDescription")
-                }
-            ])
+                  {
+                      id: "raw" as ResourceType,
+                      title: t("resourceRaw"),
+                      description: t("resourceRawDescription")
+                  }
+              ])
     ];
 
     const baseForm = useForm({
@@ -240,19 +351,42 @@ export default function Page() {
             method: baseForm.watch("http") ? "http" : null,
             port: "" as any as number,
             path: null,
-            pathMatchType: null
-        }
+            pathMatchType: null,
+            rewritePath: null,
+            rewritePathType: null,
+            priority: baseForm.watch("http") ? 100 : undefined
+        } as z.infer<typeof addTargetSchema>
     });
 
-    const watchedIp = addTargetForm.watch("ip");
-    const watchedPort = addTargetForm.watch("port");
-    const watchedSiteId = addTargetForm.watch("siteId");
+    // Helper function to check if all targets have required fields using schema validation
+    const areAllTargetsValid = () => {
+        if (targets.length === 0) return true; // No targets is valid
 
-    const handleContainerSelect = (hostname: string, port?: number) => {
-        addTargetForm.setValue("ip", hostname);
-        if (port) {
-            addTargetForm.setValue("port", port);
-        }
+        return targets.every((target) => {
+            try {
+                const isHttp = baseForm.watch("http");
+                const targetData: any = {
+                    ip: target.ip,
+                    method: target.method,
+                    port: target.port,
+                    siteId: target.siteId,
+                    path: target.path,
+                    pathMatchType: target.pathMatchType,
+                    rewritePath: target.rewritePath,
+                    rewritePathType: target.rewritePathType
+                };
+
+                // Only include priority for HTTP resources
+                if (isHttp) {
+                    targetData.priority = target.priority;
+                }
+
+                addTargetSchema.parse(targetData);
+                return true;
+            } catch {
+                return false;
+            }
+        });
     };
 
     const initializeDockerForSite = async (siteId: number) => {
@@ -263,14 +397,14 @@ export default function Page() {
         const dockerManager = new DockerManager(api, siteId);
         const dockerState = await dockerManager.initializeDocker();
 
-        setDockerStates(prev => new Map(prev.set(siteId, dockerState)));
+        setDockerStates((prev) => new Map(prev.set(siteId, dockerState)));
     };
 
     const refreshContainersForSite = async (siteId: number) => {
         const dockerManager = new DockerManager(api, siteId);
         const containers = await dockerManager.fetchContainers();
 
-        setDockerStates(prev => {
+        setDockerStates((prev) => {
             const newMap = new Map(prev);
             const existingState = newMap.get(siteId);
             if (existingState) {
@@ -281,11 +415,13 @@ export default function Page() {
     };
 
     const getDockerStateForSite = (siteId: number): DockerState => {
-        return dockerStates.get(siteId) || {
-            isEnabled: false,
-            isAvailable: false,
-            containers: []
-        };
+        return (
+            dockerStates.get(siteId) || {
+                isEnabled: false,
+                isAvailable: false,
+                containers: []
+            }
+        );
     };
 
     async function addTarget(data: z.infer<typeof addTargetSchema>) {
@@ -309,15 +445,34 @@ export default function Page() {
 
         const site = sites.find((site) => site.siteId === data.siteId);
 
+        const isHttp = baseForm.watch("http");
+
         const newTarget: LocalTarget = {
             ...data,
-            path: data.path || null,
-            pathMatchType: data.pathMatchType || null,
+            path: isHttp ? (data.path || null) : null,
+            pathMatchType: isHttp ? (data.pathMatchType || null) : null,
+            rewritePath: isHttp ? (data.rewritePath || null) : null,
+            rewritePathType: isHttp ? (data.rewritePathType || null) : null,
             siteType: site?.type || null,
             enabled: true,
             targetId: new Date().getTime(),
             new: true,
-            resourceId: 0 // Will be set when resource is created
+            resourceId: 0, // Will be set when resource is created
+            priority: isHttp ? (data.priority || 100) : 100, // Default priority
+            hcEnabled: false,
+            hcPath: null,
+            hcMethod: null,
+            hcInterval: null,
+            hcTimeout: null,
+            hcHeaders: null,
+            hcScheme: null,
+            hcHostname: null,
+            hcPort: null,
+            hcFollowRedirects: null,
+            hcHealth: "unknown",
+            hcStatus: null,
+            hcMode: null,
+            hcUnhealthyInterval: null
         };
 
         setTargets([...targets, newTarget]);
@@ -326,7 +481,10 @@ export default function Page() {
             method: baseForm.watch("http") ? "http" : null,
             port: "" as any as number,
             path: null,
-            pathMatchType: null
+            pathMatchType: null,
+            rewritePath: null,
+            rewritePathType: null,
+            priority: isHttp ? 100 : undefined
         });
     }
 
@@ -346,11 +504,11 @@ export default function Page() {
             targets.map((target) =>
                 target.targetId === targetId
                     ? {
-                        ...target,
-                        ...data,
-                        updated: true,
-                        siteType: site?.type || null
-                    }
+                          ...target,
+                          ...data,
+                          updated: true,
+                          siteType: site ? site.type : target.siteType
+                      }
                     : target
             )
         );
@@ -365,7 +523,7 @@ export default function Page() {
         try {
             const payload = {
                 name: baseData.name,
-                http: baseData.http
+                http: baseData.http,
             };
 
             let sanitizedSubdomain: string | undefined;
@@ -378,7 +536,9 @@ export default function Page() {
                     : undefined;
 
                 Object.assign(payload, {
-                    subdomain: sanitizedSubdomain ? toASCII(sanitizedSubdomain) : undefined,
+                    subdomain: sanitizedSubdomain
+                        ? toASCII(sanitizedSubdomain)
+                        : undefined,
                     domainId: httpData.domainId,
                     protocol: "tcp"
                 });
@@ -409,21 +569,40 @@ export default function Page() {
             if (res && res.status === 201) {
                 const id = res.data.data.resourceId;
                 const niceId = res.data.data.niceId;
-                setResourceId(id);
+                setNiceId(niceId);
 
                 // Create targets if any exist
                 if (targets.length > 0) {
                     try {
                         for (const target of targets) {
-                            const data = {
+                            const data: any = {
                                 ip: target.ip,
                                 port: target.port,
                                 method: target.method,
                                 enabled: target.enabled,
                                 siteId: target.siteId,
-                                path: target.path,
-                                pathMatchType: target.pathMatchType
+                                hcEnabled: target.hcEnabled,
+                                hcPath: target.hcPath || null,
+                                hcMethod: target.hcMethod || null,
+                                hcInterval: target.hcInterval || null,
+                                hcTimeout: target.hcTimeout || null,
+                                hcHeaders: target.hcHeaders || null,
+                                hcScheme: target.hcScheme || null,
+                                hcHostname: target.hcHostname || null,
+                                hcPort: target.hcPort || null,
+                                hcFollowRedirects:
+                                    target.hcFollowRedirects || null,
+                                hcStatus: target.hcStatus || null
                             };
+
+                            // Only include path-related fields for HTTP resources
+                            if (isHttp) {
+                                data.path = target.path;
+                                data.pathMatchType = target.pathMatchType;
+                                data.rewritePath = target.rewritePath;
+                                data.rewritePathType = target.rewritePathType;
+                                data.priority = target.priority;
+                            }
 
                             await api.put(`/resource/${id}/target`, data);
                         }
@@ -526,7 +705,7 @@ export default function Page() {
                     const rawDomains = res.data.data.domains as DomainRow[];
                     const domains = rawDomains.map((domain) => ({
                         ...domain,
-                        baseDomain: toUnicode(domain.baseDomain),
+                        baseDomain: toUnicode(domain.baseDomain)
                     }));
                     setBaseDomains(domains);
                     // if (domains.length) {
@@ -544,102 +723,211 @@ export default function Page() {
         load();
     }, []);
 
-    const columns: ColumnDef<LocalTarget>[] = [
-        {
-            accessorKey: "path",
-            header: t("matchPath"),
+    function TargetHealthCheck(targetId: number, config: any) {
+        setTargets(
+            targets.map((target) =>
+                target.targetId === targetId
+                    ? {
+                          ...target,
+                          ...config,
+                          updated: true
+                      }
+                    : target
+            )
+        );
+    }
+
+    const openHealthCheckDialog = (target: LocalTarget) => {
+        console.log(target);
+        setSelectedTargetForHealthCheck(target);
+        setHealthCheckDialogOpen(true);
+    };
+
+    const getColumns = (): ColumnDef<LocalTarget>[] => {
+        const baseColumns: ColumnDef<LocalTarget>[] = [];
+        const isHttp = baseForm.watch("http");
+
+        const priorityColumn: ColumnDef<LocalTarget> = {
+            id: "priority",
+            header: () => (
+                <div className="flex items-center gap-2">
+                    {t("priority")}
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <Info className="h-4 w-4 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                                <p>{t("priorityDescription")}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                </div>
+            ),
             cell: ({ row }) => {
-                const [showPathInput, setShowPathInput] = useState(
-                    !!(row.original.path || row.original.pathMatchType)
-                );
-
-                if (!showPathInput) {
-                    return (
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                setShowPathInput(true);
-                                // Set default pathMatchType when first showing path input
-                                if (!row.original.pathMatchType) {
-                                    updateTarget(row.original.targetId, {
-                                        ...row.original,
-                                        pathMatchType: "prefix"
-                                    });
-                                }
-                            }}
-                        >
-                            + {t("matchPath")}
-                        </Button>
-                    );
-                }
-
                 return (
-                    <div className="flex gap-2 min-w-[200px] items-center">
-                        <Select
-                            defaultValue={row.original.pathMatchType || "prefix"}
-                            onValueChange={(value) =>
-                                updateTarget(row.original.targetId, {
-                                    ...row.original,
-                                    pathMatchType: value as "exact" | "prefix" | "regex"
-                                })
-                            }
-                        >
-                            <SelectTrigger className="w-25">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="prefix">Prefix</SelectItem>
-                                <SelectItem value="exact">Exact</SelectItem>
-                                <SelectItem value="regex">Regex</SelectItem>
-                            </SelectContent>
-                        </Select>
+                    <div className="flex items-center justify-center w-full">
                         <Input
-                            placeholder={
-                                row.original.pathMatchType === "regex"
-                                    ? "^/api/.*"
-                                    : "/path"
-                            }
-                            defaultValue={row.original.path || ""}
-                            className="flex-1 min-w-[150px]"
+                            type="number"
+                            min="1"
+                            max="1000"
+                            defaultValue={row.original.priority || 100}
+                            className="w-full max-w-20"
                             onBlur={(e) => {
-                                const value = e.target.value.trim();
-                                if (!value) {
-                                    setShowPathInput(false);
+                                const value = parseInt(e.target.value, 10);
+                                if (value >= 1 && value <= 1000) {
                                     updateTarget(row.original.targetId, {
                                         ...row.original,
-                                        path: null,
-                                        pathMatchType: null
-                                    });
-                                } else {
-                                    updateTarget(row.original.targetId, {
-                                        ...row.original,
-                                        path: value
+                                        priority: value
                                     });
                                 }
                             }}
                         />
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                setShowPathInput(false);
-                                updateTarget(row.original.targetId, {
-                                    ...row.original,
-                                    path: null,
-                                    pathMatchType: null
-                                });
-                            }}
-                        >
-                            ×
-                        </Button>
-
-                        <MoveRight className="ml-4 h-4 w-4" />
                     </div>
                 );
-            }
-        },
-        {
-            accessorKey: "siteId",
-            header: t("site"),
+            },
+            size: 120,
+            minSize: 100,
+            maxSize: 150
+        };
+
+        const healthCheckColumn: ColumnDef<LocalTarget> = {
+            accessorKey: "healthCheck",
+            header: t("healthCheck"),
+            cell: ({ row }) => {
+                const status = row.original.hcHealth || "unknown";
+                const isEnabled = row.original.hcEnabled;
+
+                const getStatusColor = (status: string) => {
+                    switch (status) {
+                        case "healthy":
+                            return "green";
+                        case "unhealthy":
+                            return "red";
+                        case "unknown":
+                        default:
+                            return "secondary";
+                    }
+                };
+
+                const getStatusText = (status: string) => {
+                    switch (status) {
+                        case "healthy":
+                            return t("healthCheckHealthy");
+                        case "unhealthy":
+                            return t("healthCheckUnhealthy");
+                        case "unknown":
+                        default:
+                            return t("healthCheckUnknown");
+                    }
+                };
+
+                const getStatusIcon = (status: string) => {
+                    switch (status) {
+                        case "healthy":
+                            return <CircleCheck className="w-3 h-3" />;
+                        case "unhealthy":
+                            return <CircleX className="w-3 h-3" />;
+                        case "unknown":
+                        default:
+                            return null;
+                    }
+                };
+
+                return (
+                    <div className="flex items-center justify-center w-full">
+                        {row.original.siteType === "newt" ? (
+                            <Button
+                                variant="outline"
+                                className="flex items-center justify-between gap-2 p-2 w-full text-left cursor-pointer"
+                                onClick={() =>
+                                    openHealthCheckDialog(row.original)
+                                }
+                            >
+                                <Badge variant={getStatusColor(status)}>
+                                    <div className="flex items-center gap-1">
+                                        {getStatusIcon(status)}
+                                        {getStatusText(status)}
+                                    </div>
+                                </Badge>
+                                <Settings className="h-4 w-4" />
+                            </Button>
+                        ) : (
+                            <span>-</span>
+                        )}
+                    </div>
+                );
+            },
+            size: 200,
+            minSize: 180,
+            maxSize: 250
+        };
+
+        const matchPathColumn: ColumnDef<LocalTarget> = {
+            accessorKey: "path",
+            header: t("matchPath"),
+            cell: ({ row }) => {
+                const hasPathMatch = !!(
+                    row.original.path || row.original.pathMatchType
+                );
+
+                return (
+                    <div className="flex items-center justify-center w-full">
+                        {hasPathMatch ? (
+                            <PathMatchModal
+                                value={{
+                                    path: row.original.path,
+                                    pathMatchType: row.original.pathMatchType
+                                }}
+                                onChange={(config) =>
+                                    updateTarget(row.original.targetId, config)
+                                }
+                                trigger={
+                                    <Button
+                                        variant="outline"
+                                        className="flex items-center gap-2 p-2 w-full text-left cursor-pointer max-w-[200px]"
+                                    >
+                                        <PathMatchDisplay
+                                            value={{
+                                                path: row.original.path,
+                                                pathMatchType:
+                                                    row.original.pathMatchType
+                                            }}
+                                        />
+                                    </Button>
+                                }
+                            />
+                        ) : (
+                            <PathMatchModal
+                                value={{
+                                    path: row.original.path,
+                                    pathMatchType: row.original.pathMatchType
+                                }}
+                                onChange={(config) =>
+                                    updateTarget(row.original.targetId, config)
+                                }
+                                trigger={
+                                    <Button
+                                        variant="outline"
+                                        className="w-full max-w-[200px]"
+                                    >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        {t("matchPath")}
+                                    </Button>
+                                }
+                            />
+                        )}
+                    </div>
+                );
+            },
+            size: 200,
+            minSize: 180,
+            maxSize: 200
+        };
+
+        const addressColumn: ColumnDef<LocalTarget> = {
+            accessorKey: "address",
+            header: t("address"),
             cell: ({ row }) => {
                 const selectedSite = sites.find(
                     (site) => site.siteId === row.original.siteId
@@ -651,206 +939,336 @@ export default function Page() {
                 ) => {
                     updateTarget(row.original.targetId, {
                         ...row.original,
-                        ip: hostname
+                        ip: hostname,
+                        ...(port && { port: port })
                     });
-                    if (port) {
-                        updateTarget(row.original.targetId, {
-                            ...row.original,
-                            port: port
-                        });
-                    }
                 };
 
                 return (
-                    <div className="flex gap-2 items-center">
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    role="combobox"
-                                    className={cn(
-                                        "justify-between flex-1",
-                                        !row.original.siteId &&
-                                        "text-muted-foreground"
-                                    )}
-                                >
-                                    {row.original.siteId
-                                        ? selectedSite?.name
-                                        : t("siteSelect")}
-                                    <CaretSortIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="p-0">
-                                <Command>
-                                    <CommandInput
-                                        placeholder={t("siteSearch")}
-                                    />
-                                    <CommandList>
-                                        <CommandEmpty>
-                                            {t("siteNotFound")}
-                                        </CommandEmpty>
-                                        <CommandGroup>
-                                            {sites.map((site) => (
-                                                <CommandItem
-                                                    value={`${site.siteId}:${site.name}:${site.niceId}`}
-                                                    key={site.siteId}
-                                                    onSelect={() => {
-                                                        updateTarget(
-                                                            row.original
-                                                                .targetId,
-                                                            {
-                                                                siteId: site.siteId
-                                                            }
-                                                        );
-                                                    }}
-                                                >
-                                                    <CheckIcon
-                                                        className={cn(
-                                                            "mr-2 h-4 w-4",
-                                                            site.siteId ===
+                    <div className="flex items-center w-full">
+                        <div className="flex items-center w-full justify-start py-0 space-x-2 px-0 cursor-default border border-input shadow-2xs rounded-md">
+                            {selectedSite &&
+                                selectedSite.type === "newt" &&
+                                (() => {
+                                    const dockerState = getDockerStateForSite(
+                                        selectedSite.siteId
+                                    );
+                                    return (
+                                        <ContainersSelector
+                                            site={selectedSite}
+                                            containers={dockerState.containers}
+                                            isAvailable={
+                                                dockerState.isAvailable
+                                            }
+                                            onContainerSelect={
+                                                handleContainerSelectForTarget
+                                            }
+                                            onRefresh={() =>
+                                                refreshContainersForSite(
+                                                    selectedSite.siteId
+                                                )
+                                            }
+                                        />
+                                    );
+                                })()}
+
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        role="combobox"
+                                        className={cn(
+                                            "w-[180px] justify-between text-sm border-r pr-4 rounded-none h-8 hover:bg-transparent",
+                                            !row.original.siteId &&
+                                                "text-muted-foreground"
+                                        )}
+                                    >
+                                        <span className="truncate max-w-[150px]">
+                                            {row.original.siteId
+                                                ? selectedSite?.name
+                                                : t("siteSelect")}
+                                        </span>
+                                        <CaretSortIcon className="ml-2h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="p-0 w-[180px]">
+                                    <Command>
+                                        <CommandInput
+                                            placeholder={t("siteSearch")}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>
+                                                {t("siteNotFound")}
+                                            </CommandEmpty>
+                                            <CommandGroup>
+                                                {sites.map((site) => (
+                                                    <CommandItem
+                                                        key={site.siteId}
+                                                        value={`${site.siteId}:${site.name}`}
+                                                        onSelect={() =>
+                                                            updateTarget(
                                                                 row.original
-                                                                    .siteId
-                                                                ? "opacity-100"
-                                                                : "opacity-0"
-                                                        )}
-                                                    />
-                                                    {site.name}
-                                                </CommandItem>
-                                            ))}
-                                        </CommandGroup>
-                                    </CommandList>
-                                </Command>
-                            </PopoverContent>
-                        </Popover>
-                        {selectedSite && selectedSite.type === "newt" && (() => {
-                            const dockerState = getDockerStateForSite(selectedSite.siteId);
-                            return (
-                                <ContainersSelector
-                                    site={selectedSite}
-                                    containers={dockerState.containers}
-                                    isAvailable={dockerState.isAvailable}
-                                    onContainerSelect={handleContainerSelectForTarget}
-                                    onRefresh={() => refreshContainersForSite(selectedSite.siteId)}
-                                />
-                            );
-                        })()}
+                                                                    .targetId,
+                                                                {
+                                                                    siteId: site.siteId
+                                                                }
+                                                            )
+                                                        }
+                                                    >
+                                                        <CheckIcon
+                                                            className={cn(
+                                                                "mr-2 h-4 w-4",
+                                                                site.siteId ===
+                                                                    row.original
+                                                                        .siteId
+                                                                    ? "opacity-100"
+                                                                    : "opacity-0"
+                                                            )}
+                                                        />
+                                                        {site.name}
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+
+                            <Select
+                                defaultValue={row.original.method ?? "http"}
+                                onValueChange={(value) =>
+                                    updateTarget(row.original.targetId, {
+                                        ...row.original,
+                                        method: value
+                                    })
+                                }
+                            >
+                                <SelectTrigger className="h-8 px-2 w-[70px] border-none bg-transparent shadow-none focus:ring-0 focus:outline-none focus-visible:ring-0 data-[state=open]:bg-transparent">
+                                    {row.original.method || "http"}
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="http">http</SelectItem>
+                                    <SelectItem value="https">https</SelectItem>
+                                    <SelectItem value="h2c">h2c</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <div className="flex items-center justify-center bg-muted px-2 h-9">
+                                {"://"}
+                            </div>
+
+                            <Input
+                                defaultValue={row.original.ip}
+                                placeholder="IP / Hostname"
+                                className="flex-1 min-w-[120px] pl-0 border-none placeholder-gray-400"
+                                onBlur={(e) => {
+                                    const input = e.target.value.trim();
+                                    const hasProtocol =
+                                        /^(https?|h2c):\/\//.test(input);
+                                    const hasPort = /:\d+(?:\/|$)/.test(input);
+
+                                    if (hasProtocol || hasPort) {
+                                        const parsed = parseHostTarget(input);
+                                        if (parsed) {
+                                            updateTarget(
+                                                row.original.targetId,
+                                                {
+                                                    ...row.original,
+                                                    method: hasProtocol
+                                                        ? parsed.protocol
+                                                        : row.original.method,
+                                                    ip: parsed.host,
+                                                    port: hasPort
+                                                        ? parsed.port
+                                                        : row.original.port
+                                                }
+                                            );
+                                        } else {
+                                            updateTarget(
+                                                row.original.targetId,
+                                                {
+                                                    ...row.original,
+                                                    ip: input
+                                                }
+                                            );
+                                        }
+                                    } else {
+                                        updateTarget(row.original.targetId, {
+                                            ...row.original,
+                                            ip: input
+                                        });
+                                    }
+                                }}
+                            />
+                            <div className="flex items-center justify-center bg-muted px-2 h-9">
+                                {":"}
+                            </div>
+                            <Input
+                                placeholder="Port"
+                                defaultValue={
+                                    row.original.port === 0
+                                        ? ""
+                                        : row.original.port
+                                }
+                                className="w-[75px] pl-0 border-none placeholder-gray-400"
+                                onBlur={(e) => {
+                                    const value = parseInt(e.target.value, 10);
+                                    if (!isNaN(value) && value > 0) {
+                                        updateTarget(row.original.targetId, {
+                                            ...row.original,
+                                            port: value
+                                        });
+                                    } else {
+                                        updateTarget(row.original.targetId, {
+                                            ...row.original,
+                                            port: 0
+                                        });
+                                    }
+                                }}
+                            />
+                        </div>
                     </div>
                 );
-            }
-        },
-        ...(baseForm.watch("http")
-            ? [
-                {
-                    accessorKey: "method",
-                    header: t("method"),
-                    cell: ({ row }: { row: Row<LocalTarget> }) => (
-                        <Select
-                            defaultValue={row.original.method ?? ""}
-                            onValueChange={(value) =>
-                                updateTarget(row.original.targetId, {
-                                    ...row.original,
-                                    method: value
-                                })
-                            }
-                        >
-                            <SelectTrigger>
-                                {row.original.method}
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="http">http</SelectItem>
-                                <SelectItem value="https">https</SelectItem>
-                                <SelectItem value="h2c">h2c</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    )
-                }
-            ]
-            : []),
-        {
-            accessorKey: "ip",
-            header: t("targetAddr"),
-            cell: ({ row }) => (
-                <Input
-                    defaultValue={row.original.ip}
-                    className="min-w-[150px]"
-                    onBlur={(e) => {
-                        const input = e.target.value.trim();
-                        const hasProtocol = /^(https?|h2c):\/\//.test(input);
-                        const hasPort = /:\d+(?:\/|$)/.test(input);
+            },
+            size: 400,
+            minSize: 350,
+            maxSize: 500
+        };
 
-                        if (hasProtocol || hasPort) {
-                            const parsed = parseHostTarget(input);
-                            if (parsed) {
-                                updateTarget(row.original.targetId, {
-                                    ...row.original,
-                                    method: hasProtocol ? parsed.protocol : row.original.method,
-                                    ip: parsed.host,
-                                    port: hasPort ? parsed.port : row.original.port
-                                });
-                            } else {
-                                updateTarget(row.original.targetId, {
-                                    ...row.original,
-                                    ip: input
-                                });
-                            }
-                        } else {
-                            updateTarget(row.original.targetId, {
-                                ...row.original,
-                                ip: input
-                            });
-                        }
-                    }}
-                />
-            )
-        },
-        {
-            accessorKey: "port",
-            header: t("targetPort"),
-            cell: ({ row }) => (
-                <Input
-                    type="number"
-                    defaultValue={row.original.port}
-                    className="min-w-[100px]"
-                    onBlur={(e) =>
-                        updateTarget(row.original.targetId, {
-                            ...row.original,
-                            port: parseInt(e.target.value, 10)
-                        })
-                    }
-                />
-            )
-        },
-        {
+        const rewritePathColumn: ColumnDef<LocalTarget> = {
+            accessorKey: "rewritePath",
+            header: t("rewritePath"),
+            cell: ({ row }) => {
+                const hasRewritePath = !!(
+                    row.original.rewritePath || row.original.rewritePathType
+                );
+                const noPathMatch =
+                    !row.original.path && !row.original.pathMatchType;
+
+                return (
+                    <div className="flex items-center justify-center w-full">
+                        {hasRewritePath && !noPathMatch ? (
+                            <PathRewriteModal
+                                value={{
+                                    rewritePath: row.original.rewritePath,
+                                    rewritePathType:
+                                        row.original.rewritePathType
+                                }}
+                                onChange={(config) =>
+                                    updateTarget(row.original.targetId, config)
+                                }
+                                trigger={
+                                    <Button
+                                        variant="outline"
+                                        className="flex items-center gap-2 p-2 w-full text-left cursor-pointer max-w-[200px]"
+                                        disabled={noPathMatch}
+                                    >
+                                        <PathRewriteDisplay
+                                            value={{
+                                                rewritePath:
+                                                    row.original.rewritePath,
+                                                rewritePathType:
+                                                    row.original.rewritePathType
+                                            }}
+                                        />
+                                    </Button>
+                                }
+                            />
+                        ) : (
+                            <PathRewriteModal
+                                value={{
+                                    rewritePath: row.original.rewritePath,
+                                    rewritePathType:
+                                        row.original.rewritePathType
+                                }}
+                                onChange={(config) =>
+                                    updateTarget(row.original.targetId, config)
+                                }
+                                trigger={
+                                    <Button
+                                        variant="outline"
+                                        disabled={noPathMatch}
+                                        className="w-full max-w-[200px]"
+                                    >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        {t("rewritePath")}
+                                    </Button>
+                                }
+                                disabled={noPathMatch}
+                            />
+                        )}
+                    </div>
+                );
+            },
+            size: 200,
+            minSize: 180,
+            maxSize: 200
+        };
+
+        const enabledColumn: ColumnDef<LocalTarget> = {
             accessorKey: "enabled",
             header: t("enabled"),
             cell: ({ row }) => (
-                <Switch
-                    defaultChecked={row.original.enabled}
-                    onCheckedChange={(val) =>
-                        updateTarget(row.original.targetId, {
-                            ...row.original,
-                            enabled: val
-                        })
-                    }
-                />
-            )
-        },
-        {
+                <div className="flex items-center justify-center w-full">
+                    <Switch
+                        defaultChecked={row.original.enabled}
+                        onCheckedChange={(val) =>
+                            updateTarget(row.original.targetId, {
+                                ...row.original,
+                                enabled: val
+                            })
+                        }
+                    />
+                </div>
+            ),
+            size: 100,
+            minSize: 80,
+            maxSize: 120
+        };
+
+        const actionsColumn: ColumnDef<LocalTarget> = {
             id: "actions",
             cell: ({ row }) => (
-                <>
-                    <div className="flex items-center justify-end space-x-2">
-                        <Button
-                            variant="outline"
-                            onClick={() => removeTarget(row.original.targetId)}
-                        >
-                            {t("delete")}
-                        </Button>
-                    </div>
-                </>
-            )
+                <div className="flex items-center justify-end w-full">
+                    <Button
+                        variant="outline"
+                        onClick={() => removeTarget(row.original.targetId)}
+                    >
+                        {t("delete")}
+                    </Button>
+                </div>
+            ),
+            size: 100,
+            minSize: 80,
+            maxSize: 120
+        };
+
+        if (isAdvancedMode) {
+            const columns = [
+                addressColumn,
+                healthCheckColumn,
+                enabledColumn,
+                actionsColumn
+            ];
+
+            // Only include path-related columns for HTTP resources
+            if (isHttp) {
+                columns.unshift(matchPathColumn);
+                columns.splice(3, 0, rewritePathColumn, priorityColumn);
+            }
+
+            return columns;
+        } else {
+            return [
+                addressColumn,
+                healthCheckColumn,
+                enabledColumn,
+                actionsColumn
+            ];
         }
-    ];
+    };
+
+    const columns = getColumns();
 
     const table = useReactTable({
         data: targets,
@@ -1091,10 +1509,10 @@ export default function Page() {
                                                                                     .target
                                                                                     .value
                                                                                     ? parseInt(
-                                                                                        e
-                                                                                            .target
-                                                                                            .value
-                                                                                    )
+                                                                                          e
+                                                                                              .target
+                                                                                              .value
+                                                                                      )
                                                                                     : undefined
                                                                             )
                                                                         }
@@ -1166,281 +1584,9 @@ export default function Page() {
                                     </SettingsSectionDescription>
                                 </SettingsSectionHeader>
                                 <SettingsSectionBody>
-                                    <div className="p-4 border rounded-md">
-                                        <Form {...addTargetForm}>
-                                            <form
-                                                onSubmit={addTargetForm.handleSubmit(
-                                                    addTarget
-                                                )}
-                                                className="space-y-4"
-                                            >
-                                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-start">
-                                                    <FormField
-                                                        control={
-                                                            addTargetForm.control
-                                                        }
-                                                        name="siteId"
-                                                        render={({ field }) => (
-                                                            <FormItem className="flex flex-col">
-                                                                <FormLabel>
-                                                                    {t("site")}
-                                                                </FormLabel>
-                                                                <div className="flex gap-2">
-                                                                    <Popover>
-                                                                        <PopoverTrigger
-                                                                            asChild
-                                                                        >
-                                                                            <FormControl>
-                                                                                <Button
-                                                                                    variant="outline"
-                                                                                    role="combobox"
-                                                                                    className={cn(
-                                                                                        "justify-between flex-1",
-                                                                                        !field.value &&
-                                                                                        "text-muted-foreground"
-                                                                                    )}
-                                                                                >
-                                                                                    {field.value
-                                                                                        ? sites.find(
-                                                                                            (
-                                                                                                site
-                                                                                            ) =>
-                                                                                                site.siteId ===
-                                                                                                field.value
-                                                                                        )
-                                                                                            ?.name
-                                                                                        : t(
-                                                                                            "siteSelect"
-                                                                                        )}
-                                                                                    <CaretSortIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                                                </Button>
-                                                                            </FormControl>
-                                                                        </PopoverTrigger>
-                                                                        <PopoverContent className="p-0">
-                                                                            <Command>
-                                                                                <CommandInput
-                                                                                    placeholder={t(
-                                                                                        "siteSearch"
-                                                                                    )}
-                                                                                />
-                                                                                <CommandList>
-                                                                                    <CommandEmpty>
-                                                                                        {t(
-                                                                                            "siteNotFound"
-                                                                                        )}
-                                                                                    </CommandEmpty>
-                                                                                    <CommandGroup>
-                                                                                        {sites.map(
-                                                                                            (
-                                                                                                site
-                                                                                            ) => (
-                                                                                                <CommandItem
-                                                                                                    value={`${site.siteId}:${site.name}:${site.niceId}`}
-                                                                                                    key={
-                                                                                                        site.siteId
-                                                                                                    }
-                                                                                                    onSelect={() => {
-                                                                                                        addTargetForm.setValue(
-                                                                                                            "siteId",
-                                                                                                            site.siteId
-                                                                                                        );
-                                                                                                    }}
-                                                                                                >
-                                                                                                    <CheckIcon
-                                                                                                        className={cn(
-                                                                                                            "mr-2 h-4 w-4",
-                                                                                                            site.siteId ===
-                                                                                                                field.value
-                                                                                                                ? "opacity-100"
-                                                                                                                : "opacity-0"
-                                                                                                        )}
-                                                                                                    />
-                                                                                                    {
-                                                                                                        site.name
-                                                                                                    }
-                                                                                                </CommandItem>
-                                                                                            )
-                                                                                        )}
-                                                                                    </CommandGroup>
-                                                                                </CommandList>
-                                                                            </Command>
-                                                                        </PopoverContent>
-                                                                    </Popover>
-
-                                                                    {field.value &&
-                                                                        (() => {
-                                                                            const selectedSite =
-                                                                                sites.find(
-                                                                                    (
-                                                                                        site
-                                                                                    ) =>
-                                                                                        site.siteId ===
-                                                                                        field.value
-                                                                                );
-                                                                            return selectedSite &&
-                                                                                selectedSite.type ===
-                                                                                "newt" ? (() => {
-                                                                                    const dockerState = getDockerStateForSite(selectedSite.siteId);
-                                                                                    return (
-                                                                                        <ContainersSelector
-                                                                                            site={selectedSite}
-                                                                                            containers={dockerState.containers}
-                                                                                            isAvailable={dockerState.isAvailable}
-                                                                                            onContainerSelect={handleContainerSelect}
-                                                                                            onRefresh={() => refreshContainersForSite(selectedSite.siteId)}
-                                                                                        />
-                                                                                    );
-                                                                                })() : null;
-                                                                        })()}
-                                                                </div>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
-
-                                                    {baseForm.watch("http") && (
-                                                        <FormField
-                                                            control={
-                                                                addTargetForm.control
-                                                            }
-                                                            name="method"
-                                                            render={({
-                                                                field
-                                                            }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>
-                                                                        {t(
-                                                                            "method"
-                                                                        )}
-                                                                    </FormLabel>
-                                                                    <FormControl>
-                                                                        <Select
-                                                                            value={
-                                                                                field.value ||
-                                                                                undefined
-                                                                            }
-                                                                            onValueChange={(
-                                                                                value
-                                                                            ) => {
-                                                                                addTargetForm.setValue(
-                                                                                    "method",
-                                                                                    value
-                                                                                );
-                                                                            }}
-                                                                        >
-                                                                            <SelectTrigger
-                                                                                id="method"
-                                                                                className="w-full"
-                                                                            >
-                                                                                <SelectValue
-                                                                                    placeholder={t(
-                                                                                        "methodSelect"
-                                                                                    )}
-                                                                                />
-                                                                            </SelectTrigger>
-                                                                            <SelectContent>
-                                                                                <SelectItem value="http">
-                                                                                    http
-                                                                                </SelectItem>
-                                                                                <SelectItem value="https">
-                                                                                    https
-                                                                                </SelectItem>
-                                                                                <SelectItem value="h2c">
-                                                                                    h2c
-                                                                                </SelectItem>
-                                                                            </SelectContent>
-                                                                        </Select>
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
-                                                    )}
-
-                                                    <FormField
-                                                        control={addTargetForm.control}
-                                                        name="ip"
-                                                        render={({ field }) => (
-                                                            <FormItem className="relative">
-                                                                <FormLabel>{t("targetAddr")}</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        id="ip"
-                                                                        {...field}
-                                                                        onBlur={(e) => {
-                                                                            const input = e.target.value.trim();
-                                                                            const hasProtocol = /^(https?|h2c):\/\//.test(input);
-                                                                            const hasPort = /:\d+(?:\/|$)/.test(input);
-
-                                                                            if (hasProtocol || hasPort) {
-                                                                                const parsed = parseHostTarget(input);
-                                                                                if (parsed) {
-                                                                                    if (hasProtocol || !addTargetForm.getValues("method")) {
-                                                                                        addTargetForm.setValue("method", parsed.protocol);
-                                                                                    }
-                                                                                    addTargetForm.setValue("ip", parsed.host);
-                                                                                    if (hasPort || !addTargetForm.getValues("port")) {
-                                                                                        addTargetForm.setValue("port", parsed.port);
-                                                                                    }
-                                                                                }
-                                                                            } else {
-                                                                                field.onBlur();
-                                                                            }
-                                                                        }}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
-                                                    <FormField
-                                                        control={
-                                                            addTargetForm.control
-                                                        }
-                                                        name="port"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>
-                                                                    {t(
-                                                                        "targetPort"
-                                                                    )}
-                                                                </FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        id="port"
-                                                                        type="number"
-                                                                        {...field}
-                                                                        required
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
-                                                    />
-                                                    <Button
-                                                        type="submit"
-                                                        variant="secondary"
-                                                        className="mt-6"
-                                                        disabled={
-                                                            !(
-                                                                watchedIp &&
-                                                                watchedPort
-                                                            )
-                                                        }
-                                                    >
-                                                        {t("targetSubmit")}
-                                                    </Button>
-                                                </div>
-                                            </form>
-                                        </Form>
-                                    </div>
-
                                     {targets.length > 0 ? (
                                         <>
-                                            <h6 className="font-semibold">
-                                                {t("targetsList")}
-                                            </h6>
-                                            <div className="">
+                                            <div className="overflow-x-auto">
                                                 <Table>
                                                     <TableHeader>
                                                         {table
@@ -1466,12 +1612,12 @@ export default function Page() {
                                                                                     {header.isPlaceholder
                                                                                         ? null
                                                                                         : flexRender(
-                                                                                            header
-                                                                                                .column
-                                                                                                .columnDef
-                                                                                                .header,
-                                                                                            header.getContext()
-                                                                                        )}
+                                                                                              header
+                                                                                                  .column
+                                                                                                  .columnDef
+                                                                                                  .header,
+                                                                                              header.getContext()
+                                                                                          )}
                                                                                 </TableHead>
                                                                             )
                                                                         )}
@@ -1530,14 +1676,52 @@ export default function Page() {
                                                             </TableRow>
                                                         )}
                                                     </TableBody>
+                                                    {/* <TableCaption> */}
+                                                    {/*     {t('targetNoOneDescription')} */}
+                                                    {/* </TableCaption> */}
                                                 </Table>
+                                            </div>
+                                            <div className="flex items-center justify-between mb-4">
+                                                <div className="flex items-center justify-between w-full gap-2">
+                                                    <Button
+                                                        onClick={addNewTarget}
+                                                        variant="outline"
+                                                    >
+                                                        <Plus className="h-4 w-4 mr-2" />
+                                                        {t("addTarget")}
+                                                    </Button>
+                                                    <div className="flex items-center gap-2">
+                                                        <Switch
+                                                            id="advanced-mode-toggle"
+                                                            checked={
+                                                                isAdvancedMode
+                                                            }
+                                                            onCheckedChange={
+                                                                setIsAdvancedMode
+                                                            }
+                                                        />
+                                                        <label
+                                                            htmlFor="advanced-mode-toggle"
+                                                            className="text-sm"
+                                                        >
+                                                            {t("advancedMode")}
+                                                        </label>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </>
                                     ) : (
-                                        <div className="text-center py-8">
-                                            <p className="text-muted-foreground">
+                                        <div className="text-center py-8 border-2 border-dashed border-muted rounded-lg p-4">
+                                            <p className="text-muted-foreground mb-4">
                                                 {t("targetNoOne")}
                                             </p>
+                                            <Button
+                                                onClick={addNewTarget}
+                                                variant="outline"
+                                            >
+                                                <Plus className="h-4 w-4 mr-2" />
+                                                {t("addTarget")}
+                                            </Button>
                                         </div>
                                     )}
                                 </SettingsSectionBody>
@@ -1572,10 +1756,75 @@ export default function Page() {
                                         }
                                     }}
                                     loading={createLoading}
+                                    disabled={!areAllTargetsValid()}
                                 >
                                     {t("resourceCreate")}
                                 </Button>
                             </div>
+                            {selectedTargetForHealthCheck && (
+                                <HealthCheckDialog
+                                    open={healthCheckDialogOpen}
+                                    setOpen={setHealthCheckDialogOpen}
+                                    targetId={
+                                        selectedTargetForHealthCheck.targetId
+                                    }
+                                    targetAddress={`${selectedTargetForHealthCheck.ip}:${selectedTargetForHealthCheck.port}`}
+                                    targetMethod={
+                                        selectedTargetForHealthCheck.method ||
+                                        undefined
+                                    }
+                                    initialConfig={{
+                                        hcEnabled:
+                                            selectedTargetForHealthCheck.hcEnabled ||
+                                            false,
+                                        hcPath:
+                                            selectedTargetForHealthCheck.hcPath ||
+                                            "/",
+                                        hcMethod:
+                                            selectedTargetForHealthCheck.hcMethod ||
+                                            "GET",
+                                        hcInterval:
+                                            selectedTargetForHealthCheck.hcInterval ||
+                                            5,
+                                        hcTimeout:
+                                            selectedTargetForHealthCheck.hcTimeout ||
+                                            5,
+                                        hcHeaders:
+                                            selectedTargetForHealthCheck.hcHeaders ||
+                                            undefined,
+                                        hcScheme:
+                                            selectedTargetForHealthCheck.hcScheme ||
+                                            undefined,
+                                        hcHostname:
+                                            selectedTargetForHealthCheck.hcHostname ||
+                                            selectedTargetForHealthCheck.ip,
+                                        hcPort:
+                                            selectedTargetForHealthCheck.hcPort ||
+                                            selectedTargetForHealthCheck.port,
+                                        hcFollowRedirects:
+                                            selectedTargetForHealthCheck.hcFollowRedirects ||
+                                            true,
+                                        hcStatus:
+                                            selectedTargetForHealthCheck.hcStatus ||
+                                            undefined,
+                                        hcMode:
+                                            selectedTargetForHealthCheck.hcMode ||
+                                            "http",
+                                        hcUnhealthyInterval:
+                                            selectedTargetForHealthCheck.hcUnhealthyInterval ||
+                                            30
+                                    }}
+                                    onChanges={async (config) => {
+                                        if (selectedTargetForHealthCheck) {
+                                            console.log(config);
+                                            TargetHealthCheck(
+                                                selectedTargetForHealthCheck.targetId,
+                                                config
+                                            );
+                                        }
+                                    }}
+                                />
+                            )}
                         </SettingsContainer>
                     ) : (
                         <SettingsContainer>
@@ -1595,7 +1844,9 @@ export default function Page() {
                                                 {t("resourceAddEntrypoints")}
                                             </h3>
                                             <p className="text-sm text-muted-foreground">
-                                                {t("resourceAddEntrypointsEditFile")}
+                                                {t(
+                                                    "resourceAddEntrypointsEditFile"
+                                                )}
                                             </p>
                                             <CopyTextBox
                                                 text={`entryPoints:
@@ -1610,7 +1861,9 @@ export default function Page() {
                                                 {t("resourceExposePorts")}
                                             </h3>
                                             <p className="text-sm text-muted-foreground">
-                                                {t("resourceExposePortsEditFile")}
+                                                {t(
+                                                    "resourceExposePortsEditFile"
+                                                )}
                                             </p>
                                             <CopyTextBox
                                                 text={`ports:
@@ -1648,7 +1901,7 @@ export default function Page() {
                                     type="button"
                                     onClick={() =>
                                         router.push(
-                                            `/${orgId}/settings/resources/${resourceId}/proxy`
+                                            `/${orgId}/settings/resources/${niceId}/proxy`
                                         )
                                     }
                                 >

@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 import { generateRandomString, RandomReader } from "@oslojs/crypto/random";
 import moment from "moment";
 import logger from "@server/logger";
-import config from "@server/lib/config";
 
 const random: RandomReader = {
     read(bytes: Uint8Array): void {
@@ -23,11 +22,6 @@ function generateId(length: number): string {
 }
 
 export async function ensureSetupToken() {
-    if (config.isManagedMode()) {
-        // LETS NOT WORRY ABOUT THE SERVER SECRET WHEN HYBRID
-        return;
-    }
-
     try {
         // Check if a server admin already exists
         const [existingAdmin] = await db

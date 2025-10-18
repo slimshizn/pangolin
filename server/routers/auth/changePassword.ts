@@ -6,7 +6,7 @@ import { z } from "zod";
 import { db } from "@server/db";
 import { User, users } from "@server/db";
 import { eq } from "drizzle-orm";
-import { response } from "@server/lib";
+import { response } from "@server/lib/response";
 import {
     hashPassword,
     verifyPassword

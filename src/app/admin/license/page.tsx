@@ -31,7 +31,6 @@ import {
     CredenzaHeader,
     CredenzaTitle
 } from "@app/components/Credenza";
-import { useRouter } from "next/navigation";
 import { useLicenseStatusContext } from "@app/hooks/useLicenseStatusContext";
 import {
     SettingsContainer,
@@ -43,14 +42,10 @@ import {
     SettingsSectionFooter
 } from "@app/components/Settings";
 import SettingsSectionTitle from "@app/components/SettingsSectionTitle";
-import { Badge } from "@app/components/ui/badge";
-import { Check, Heart, InfoIcon, ShieldCheck, ShieldOff } from "lucide-react";
+import { Check, Heart, InfoIcon } from "lucide-react";
 import CopyTextBox from "@app/components/CopyTextBox";
-import { Progress } from "@app/components/ui/progress";
-import { MinusCircle, PlusCircle } from "lucide-react";
 import ConfirmDeleteDialog from "@app/components/ConfirmDeleteDialog";
 import { SitePriceCalculator } from "../../../components/SitePriceCalculator";
-import Link from "next/link";
 import { Checkbox } from "@app/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@app/components/ui/alert";
 import { useSupporterStatusContext } from "@app/hooks/useSupporterStatusContext";
@@ -70,13 +65,11 @@ export default function LicensePage() {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [selectedLicenseKey, setSelectedLicenseKey] =
         useState<LicenseKeyCache | null>(null);
-    const router = useRouter();
+
     const { licenseStatus, updateLicenseStatus } = useLicenseStatusContext();
     const [hostLicense, setHostLicense] = useState<string | null>(null);
     const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
-    const [purchaseMode, setPurchaseMode] = useState<
-        "license" | "additional-sites"
-    >("license");
+    const [purchaseMode, setPurchaseMode] = useState<"license">("license");
 
     // Separate loading states for different actions
     const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -90,10 +83,10 @@ export default function LicensePage() {
     const formSchema = z.object({
         licenseKey: z
             .string()
-            .nonempty({ message: t('licenseKeyRequired') })
+            .nonempty({ message: t("licenseKeyRequired") })
             .max(255),
         agreeToTerms: z.boolean().refine((val) => val === true, {
-            message: t('licenseTermsAgree')
+            message: t("licenseTermsAgree")
         })
     });
 
@@ -122,7 +115,7 @@ export default function LicensePage() {
                 );
             const keys = response.data.data;
             setRows(keys);
-            const hostKey = keys.find((key) => key.type === "HOST");
+            const hostKey = keys.find((key) => key.type === "host");
             if (hostKey) {
                 setHostLicense(hostKey.licenseKey);
             } else {
@@ -130,10 +123,10 @@ export default function LicensePage() {
             }
         } catch (e) {
             toast({
-                title: t('licenseErrorKeyLoad'),
+                title: t("licenseErrorKeyLoad"),
                 description: formatAxiosError(
                     e,
-                    t('licenseErrorKeyLoadDescription')
+                    t("licenseErrorKeyLoadDescription")
                 )
             });
         }
@@ -149,16 +142,16 @@ export default function LicensePage() {
             }
             await loadLicenseKeys();
             toast({
-                title: t('licenseKeyDeleted'),
-                description: t('licenseKeyDeletedDescription')
+                title: t("licenseKeyDeleted"),
+                description: t("licenseKeyDeletedDescription")
             });
             setIsDeleteModalOpen(false);
         } catch (e) {
             toast({
-                title: t('licenseErrorKeyDelete'),
+                title: t("licenseErrorKeyDelete"),
                 description: formatAxiosError(
                     e,
-                    t('licenseErrorKeyDeleteDescription')
+                    t("licenseErrorKeyDeleteDescription")
                 )
             });
         } finally {
@@ -175,15 +168,15 @@ export default function LicensePage() {
             }
             await loadLicenseKeys();
             toast({
-                title: t('licenseErrorKeyRechecked'),
-                description: t('licenseErrorKeyRecheckedDescription')
+                title: t("licenseErrorKeyRechecked"),
+                description: t("licenseErrorKeyRecheckedDescription")
             });
         } catch (e) {
             toast({
-                title: t('licenseErrorKeyRecheck'),
+                title: t("licenseErrorKeyRecheck"),
                 description: formatAxiosError(
                     e,
-                    t('licenseErrorKeyRecheckDescription')
+                    t("licenseErrorKeyRecheckDescription")
                 )
             });
         } finally {
@@ -202,8 +195,8 @@ export default function LicensePage() {
             }
 
             toast({
-                title: t('licenseKeyActivated'),
-                description: t('licenseKeyActivatedDescription')
+                title: t("licenseKeyActivated"),
+                description: t("licenseKeyActivatedDescription")
             });
 
             setIsCreateModalOpen(false);
@@ -212,10 +205,10 @@ export default function LicensePage() {
         } catch (e) {
             toast({
                 variant: "destructive",
-                title: t('licenseErrorKeyActivate'),
+                title: t("licenseErrorKeyActivate"),
                 description: formatAxiosError(
                     e,
-                    t('licenseErrorKeyActivateDescription')
+                    t("licenseErrorKeyActivateDescription")
                 )
             });
         } finally {
@@ -246,9 +239,9 @@ export default function LicensePage() {
             >
                 <CredenzaContent>
                     <CredenzaHeader>
-                        <CredenzaTitle>{t('licenseActivateKey')}</CredenzaTitle>
+                        <CredenzaTitle>{t("licenseActivateKey")}</CredenzaTitle>
                         <CredenzaDescription>
-                            {t('licenseActivateKeyDescription')}
+                            {t("licenseActivateKeyDescription")}
                         </CredenzaDescription>
                     </CredenzaHeader>
                     <CredenzaBody>
@@ -263,7 +256,9 @@ export default function LicensePage() {
                                     name="licenseKey"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>{t('licenseKey')}</FormLabel>
+                                            <FormLabel>
+                                                {t("licenseKey")}
+                                            </FormLabel>
                                             <FormControl>
                                                 <Input {...field} />
                                             </FormControl>
@@ -286,16 +281,7 @@ export default function LicensePage() {
                                             </FormControl>
                                             <div className="space-y-1 leading-none">
                                                 <FormLabel>
-                                                    {t('licenseAgreement')}
-                                                    {/* <br /> */}
-                                                    {/* <Link */}
-                                                    {/*     href="https://fossorial.io/license.html" */}
-                                                    {/*     target="_blank" */}
-                                                    {/*     rel="noopener noreferrer" */}
-                                                    {/*     className="text-primary hover:underline" */}
-                                                    {/* > */}
-                                                    {/* {t('fossorialLicense')} */}
-                                                    {/* </Link> */}
+                                                    {t("licenseAgreement")}
                                                 </FormLabel>
                                                 <FormMessage />
                                             </div>
@@ -307,7 +293,7 @@ export default function LicensePage() {
                     </CredenzaBody>
                     <CredenzaFooter>
                         <CredenzaClose asChild>
-                            <Button variant="outline">{t('close')}</Button>
+                            <Button variant="outline">{t("close")}</Button>
                         </CredenzaClose>
                         <Button
                             type="submit"
@@ -315,7 +301,7 @@ export default function LicensePage() {
                             loading={isActivatingLicense}
                             disabled={isActivatingLicense}
                         >
-                            {t('licenseActivate')}
+                            {t("licenseActivate")}
                         </Button>
                     </CredenzaFooter>
                 </CredenzaContent>
@@ -331,187 +317,98 @@ export default function LicensePage() {
                     dialog={
                         <div className="space-y-4">
                             <p>
-                                {t('licenseQuestionRemove', {selectedKey: obfuscateLicenseKey(selectedLicenseKey.licenseKey)})}
+                                {t("licenseQuestionRemove", {
+                                    selectedKey: obfuscateLicenseKey(
+                                        selectedLicenseKey.licenseKey
+                                    )
+                                })}
                             </p>
                             <p>
-                                <b>
-                                    {t('licenseMessageRemove')}
-                                </b>
+                                <b>{t("licenseMessageRemove")}</b>
                             </p>
-                            <p>
-                                {t('licenseMessageConfirm')}
-                            </p>
+                            <p>{t("licenseMessageConfirm")}</p>
                         </div>
                     }
-                    buttonText={t('licenseKeyDeleteConfirm')}
+                    buttonText={t("licenseKeyDeleteConfirm")}
                     onConfirm={async () =>
                         deleteLicenseKey(selectedLicenseKey.licenseKeyEncrypted)
                     }
                     string={selectedLicenseKey.licenseKey}
-                    title={t('licenseKeyDelete')}
+                    title={t("licenseKeyDelete")}
                 />
             )}
 
             <SettingsSectionTitle
-                title={t('licenseTitle')}
-                description={t('licenseTitleDescription')}
+                title={t("licenseTitle")}
+                description={t("licenseTitleDescription")}
             />
 
-            <Alert variant="neutral" className="mb-6">
-                <InfoIcon className="h-4 w-4" />
-                <AlertTitle className="font-semibold">
-                    {t('licenseAbout')}
-                </AlertTitle>
-                <AlertDescription>
-                    {t('licenseAboutDescription')}
-                </AlertDescription>
-            </Alert>
+            {/* <Alert variant="neutral" className="mb-6"> */}
+            {/*     <InfoIcon className="h-4 w-4" /> */}
+            {/*     <AlertTitle className="font-semibold"> */}
+            {/*         {t("licenseAbout")} */}
+            {/*     </AlertTitle> */}
+            {/*     <AlertDescription> */}
+            {/*         {t("licenseAboutDescription")} */}
+            {/*     </AlertDescription> */}
+            {/* </Alert> */}
 
             <SettingsContainer>
-                <SettingsSectionGrid cols={2}>
-                    <SettingsSection>
-                        <SettingsSectionHeader>
-                            <SSTitle>{t('licenseHost')}</SSTitle>
-                            <SettingsSectionDescription>
-                            {t('licenseHostDescription')}
-                            </SettingsSectionDescription>
-                        </SettingsSectionHeader>
-                        <div className="space-y-4">
-                            <div className="flex items-center space-x-4">
-                                {licenseStatus?.isLicenseValid ? (
-                                    <div className="space-y-2 text-green-500">
-                                        <div className="text-2xl flex items-center gap-2">
-                                            <Check />
-                                            {licenseStatus?.tier ===
-                                            "PROFESSIONAL"
-                                                ? t('licenseTierCommercial')
-                                                : licenseStatus?.tier ===
-                                                    "ENTERPRISE"
-                                                  ? t('licenseTierCommercial')
-                                                  : t('licensed')}
-                                        </div>
+                <SettingsSection>
+                    <SettingsSectionHeader>
+                        <SSTitle>{t("licenseHost")}</SSTitle>
+                        <SettingsSectionDescription>
+                            {t("licenseHostDescription")}
+                        </SettingsSectionDescription>
+                    </SettingsSectionHeader>
+                    <div className="space-y-4">
+                        <div className="flex items-center space-x-4">
+                            {licenseStatus?.isLicenseValid ? (
+                                <div className="space-y-2 text-green-500">
+                                    <div className="text-2xl flex items-center gap-2">
+                                        <Check />
+                                        {t("licensed")}
                                     </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        {supporterStatus?.visible ? (
-                                            <div className="text-2xl">
-                                                {t('communityEdition')}
-                                            </div>
-                                        ) : (
-                                            <div className="text-2xl flex items-center gap-2 text-pink-500">
-                                                <Heart />
-                                                {t('communityEdition')}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                            {licenseStatus?.hostId && (
-                                <div className="space-y-2">
-                                    <div className="text-sm font-medium">
-                                        {t('hostId')}
-                                    </div>
-                                    <CopyTextBox text={licenseStatus.hostId} />
                                 </div>
-                            )}
-                            {hostLicense && (
-                                <div className="space-y-2">
-                                    <div className="text-sm font-medium">
-                                        {t('licenseKey')}
-                                    </div>
-                                    <CopyTextBox
-                                        text={hostLicense}
-                                        displayText={obfuscateLicenseKey(
-                                            hostLicense
-                                        )}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                        <SettingsSectionFooter>
-                            <Button
-                                variant="outline"
-                                onClick={recheck}
-                                disabled={isRecheckingLicense}
-                                loading={isRecheckingLicense}
-                            >
-                                {t('licenseReckeckAll')}
-                            </Button>
-                        </SettingsSectionFooter>
-                    </SettingsSection>
-                    <SettingsSection>
-                        <SettingsSectionHeader>
-                            <SSTitle>{t('licenseSiteUsage')}</SSTitle>
-                            <SettingsSectionDescription>
-                                {t('licenseSiteUsageDecsription')}
-                            </SettingsSectionDescription>
-                        </SettingsSectionHeader>
-                        <div className="space-y-4">
-                            <div className="space-y-2">
+                            ) : (
                                 <div className="text-2xl">
-                                    {t('licenseSitesUsed', {count: licenseStatus?.usedSites || 0})}
-                                </div>
-                            </div>
-                            {!licenseStatus?.isHostLicensed && (
-                                <p className="text-sm text-muted-foreground">
-                                    {t('licenseNoSiteLimit')}
-                                </p>
-                            )}
-                            {licenseStatus?.maxSites && (
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">
-                                            {t('licenseSitesUsedMax', {usedSites: licenseStatus.usedSites || 0, maxSites: licenseStatus.maxSites})}
-                                        </span>
-                                        <span className="text-muted-foreground">
-                                            {Math.round(
-                                                ((licenseStatus.usedSites ||
-                                                    0) /
-                                                    licenseStatus.maxSites) *
-                                                    100
-                                            )}
-                                            %
-                                        </span>
-                                    </div>
-                                    <Progress
-                                        value={
-                                            ((licenseStatus.usedSites || 0) /
-                                                licenseStatus.maxSites) *
-                                            100
-                                        }
-                                        className="h-5"
-                                    />
+                                    {t("unlicensed")}
                                 </div>
                             )}
                         </div>
-                        {/* <SettingsSectionFooter> */}
-                        {/*     {!licenseStatus?.isHostLicensed ? ( */}
-                        {/*         <> */}
-                        {/*             <Button */}
-                        {/*                 onClick={() => { */}
-                        {/*                     setPurchaseMode("license"); */}
-                        {/*                     setIsPurchaseModalOpen(true); */}
-                        {/*                 }} */}
-                        {/*             > */}
-                        {/*                 {t('licensePurchase')} */}
-                        {/*             </Button> */}
-                        {/*         </> */}
-                        {/*     ) : ( */}
-                        {/*         <> */}
-                        {/*             <Button */}
-                        {/*                 variant="outline" */}
-                        {/*                 onClick={() => { */}
-                        {/*                     setPurchaseMode("additional-sites"); */}
-                        {/*                     setIsPurchaseModalOpen(true); */}
-                        {/*                 }} */}
-                        {/*             > */}
-                        {/*                 {t('licensePurchaseSites')} */}
-                        {/*             </Button> */}
-                        {/*         </> */}
-                        {/*     )} */}
-                        {/* </SettingsSectionFooter> */}
-                    </SettingsSection>
-                </SettingsSectionGrid>
+                        {licenseStatus?.hostId && (
+                            <div className="space-y-2">
+                                <div className="text-sm font-medium">
+                                    {t("hostId")}
+                                </div>
+                                <CopyTextBox text={licenseStatus.hostId} />
+                            </div>
+                        )}
+                        {hostLicense && (
+                            <div className="space-y-2">
+                                <div className="text-sm font-medium">
+                                    {t("licenseKey")}
+                                </div>
+                                <CopyTextBox
+                                    text={hostLicense}
+                                    displayText={obfuscateLicenseKey(
+                                        hostLicense
+                                    )}
+                                />
+                            </div>
+                        )}
+                    </div>
+                    <SettingsSectionFooter>
+                        <Button
+                            variant="outline"
+                            onClick={recheck}
+                            disabled={isRecheckingLicense}
+                            loading={isRecheckingLicense}
+                        >
+                            {t("licenseReckeckAll")}
+                        </Button>
+                    </SettingsSectionFooter>
+                </SettingsSection>
                 <LicenseKeysDataTable
                     licenseKeys={rows}
                     onDelete={(key) => {

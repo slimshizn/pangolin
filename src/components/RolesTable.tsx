@@ -20,6 +20,7 @@ import DeleteRoleForm from "@app/components/DeleteRoleForm";
 import { createApiClient } from "@app/lib/api";
 import { useEnvContext } from "@app/hooks/useEnvContext";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 
 export type RoleRow = Role;
 
@@ -30,6 +31,7 @@ type RolesTableProps = {
 export default function UsersTable({ roles: r }: RolesTableProps) {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const router = useRouter();
 
     const [roles, setRoles] = useState<RoleRow[]>(r);
 
@@ -40,6 +42,24 @@ export default function UsersTable({ roles: r }: RolesTableProps) {
     const { org } = useOrgContext();
 
     const t = useTranslations();
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const refreshData = async () => {
+        console.log("Data refreshed");
+        setIsRefreshing(true);
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            router.refresh();
+        } catch (error) {
+            toast({
+                title: t("error"),
+                description: t("refreshError"),
+                variant: "destructive"
+            });
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
 
     const columns: ColumnDef<RoleRow>[] = [
         {
@@ -116,6 +136,8 @@ export default function UsersTable({ roles: r }: RolesTableProps) {
                 createRole={() => {
                     setIsCreateModalOpen(true);
                 }}
+                onRefresh={refreshData}
+                isRefreshing={isRefreshing}
             />
         </>
     );

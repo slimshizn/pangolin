@@ -24,7 +24,8 @@ import {
     MoreHorizontal,
     ArrowUpRight,
     ShieldOff,
-    ShieldCheck
+    ShieldCheck,
+    RefreshCw
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -179,8 +180,26 @@ export default function ResourcesTable({
     const [internalColumnFilters, setInternalColumnFilters] =
         useState<ColumnFiltersState>([]);
     const [internalGlobalFilter, setInternalGlobalFilter] = useState<any>([]);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     const currentView = searchParams.get("view") || defaultView;
+
+    const refreshData = async () => {
+        console.log("Data refreshed");
+        setIsRefreshing(true);
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            router.refresh();
+        } catch (error) {
+            toast({
+                title: t("error"),
+                description: t("refreshError"),
+                variant: "destructive"
+            });
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
 
     useEffect(() => {
         const fetchSites = async () => {
@@ -371,7 +390,7 @@ export default function ResourcesTable({
                     <div className="flex items-center space-x-2">
                         {!resourceRow.http ? (
                             <CopyToClipboard
-                                text={resourceRow.proxyPort!.toString()}
+                                text={resourceRow.proxyPort?.toString() || ""}
                                 isLink={false}
                             />
                         ) : !resourceRow.domainId ? (
@@ -547,7 +566,7 @@ export default function ResourcesTable({
                 const resourceRow = row.original;
                 return (
                     <CopyToClipboard
-                        text={resourceRow.proxyPort!.toString()}
+                        text={resourceRow.proxyPort?.toString() || ""}
                         isLink={false}
                     />
                 );
@@ -753,7 +772,21 @@ export default function ResourcesTable({
                                 )}
                             </div>
                             <div className="flex items-center gap-2 sm:justify-end">
-                                {getActionButton()}
+                                <div>
+                                    <Button
+                                        variant="outline"
+                                        onClick={refreshData}
+                                        disabled={isRefreshing}
+                                    >
+                                        <RefreshCw
+                                            className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+                                        />
+                                        {t("refresh")}
+                                    </Button>
+                                </div>
+                                <div>
+                                    {getActionButton()}
+                                </div>
                             </div>
                         </CardHeader>
                         <CardContent>

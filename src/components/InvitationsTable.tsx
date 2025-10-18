@@ -19,6 +19,7 @@ import { createApiClient } from "@app/lib/api";
 import { useEnvContext } from "@app/hooks/useEnvContext";
 import { useTranslations } from "next-intl";
 import moment from "moment";
+import { useRouter } from "next/navigation";
 
 export type InvitationRow = {
     id: string;
@@ -45,6 +46,25 @@ export default function InvitationsTable({
 
     const api = createApiClient(useEnvContext());
     const { org } = useOrgContext();
+    const router = useRouter();
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const refreshData = async () => {
+        console.log("Data refreshed");
+        setIsRefreshing(true);
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            router.refresh();
+        } catch (error) {
+            toast({
+                title: t("error"),
+                description: t("refreshError"),
+                variant: "destructive"
+            });
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
 
     const columns: ColumnDef<InvitationRow>[] = [
         {
@@ -185,7 +205,12 @@ export default function InvitationsTable({
                 }}
             />
 
-            <InvitationsDataTable columns={columns} data={invitations} />
+            <InvitationsDataTable
+                columns={columns}
+                data={invitations}
+                onRefresh={refreshData}
+                isRefreshing={isRefreshing}
+            />
         </>
     );
 }

@@ -3,9 +3,9 @@ import { __DIRNAME, APP_VERSION } from "@server/lib/consts";
 import { db } from "@server/db";
 import { SupporterKey, supporterKey } from "@server/db";
 import { eq } from "drizzle-orm";
-import { license } from "@server/license/license";
 import { configSchema, readConfigFile } from "./readConfigFile";
 import { fromError } from "zod-validation-error";
+import { build } from "@server/build";
 
 export class Config {
     private rawConfig!: z.infer<typeof configSchema>;
@@ -89,6 +89,10 @@ export class Config {
             ? "true"
             : "false";
 
+        if (parsedConfig.server.maxmind_db_path) {
+            process.env.MAXMIND_DB_PATH = parsedConfig.server.maxmind_db_path;
+        }
+
         this.rawConfig = parsedConfig;
     }
 
@@ -96,18 +100,12 @@ export class Config {
         if (!this.rawConfig) {
             throw new Error("Config not loaded. Call load() first.");
         }
-        if (this.rawConfig.managed) {
-            // LETS NOT WORRY ABOUT THE SERVER SECRET WHEN MANAGED
-            return;
-        }
-        license.setServerSecret(this.rawConfig.server.secret!);
 
         await this.checkKeyStatus();
     }
 
     private async checkKeyStatus() {
-        const licenseStatus = await license.check();
-        if (!licenseStatus.isHostLicensed) {
+        if (build == "oss") {
             this.checkSupporterKey();
         }
     }
@@ -147,10 +145,6 @@ export class Config {
         }
 
         return false;
-    }
-
-    public isManagedMode() {
-        return typeof this.rawConfig?.managed === "object";
     }
 
     public async checkSupporterKey() {

@@ -47,6 +47,8 @@ import { ListIdpsResponse } from "@server/routers/idp";
 import { useTranslations } from "next-intl";
 import { build } from "@server/build";
 import Image from "next/image";
+import { useSubscriptionStatusContext } from "@app/hooks/useSubscriptionStatusContext";
+import { TierId } from "@server/lib/billing/tiers";
 
 type UserType = "internal" | "oidc";
 
@@ -74,7 +76,11 @@ export default function Page() {
     const api = createApiClient({ env });
     const t = useTranslations();
 
-    const [selectedOption, setSelectedOption] = useState<string | null>("internal");
+    const subscription = useSubscriptionStatusContext();
+
+    const [selectedOption, setSelectedOption] = useState<string | null>(
+        "internal"
+    );
     const [inviteLink, setInviteLink] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [expiresInDays, setExpiresInDays] = useState(1);
@@ -199,7 +205,13 @@ export default function Page() {
             googleAzureForm.reset();
             genericOidcForm.reset();
         }
-    }, [selectedOption, env.email.emailEnabled, internalForm, googleAzureForm, genericOidcForm]);
+    }, [
+        selectedOption,
+        env.email.emailEnabled,
+        internalForm,
+        googleAzureForm,
+        genericOidcForm
+    ]);
 
     useEffect(() => {
         if (!selectedOption) {
@@ -227,8 +239,14 @@ export default function Page() {
         }
 
         async function fetchIdps() {
+            if (build === "saas" && !subscription?.subscribed) {
+                return;
+            }
+
             const res = await api
-                .get<AxiosResponse<ListIdpsResponse>>("/idp")
+                .get<
+                    AxiosResponse<ListIdpsResponse>
+                >(build === "saas" ? `/org/${orgId}/idp` : "/idp")
                 .catch((e) => {
                     console.error(e);
                     toast({
@@ -334,7 +352,9 @@ export default function Page() {
     async function onSubmitGoogleAzure(
         values: z.infer<typeof googleAzureFormSchema>
     ) {
-        const selectedUserOption = userOptions.find(opt => opt.id === selectedOption);
+        const selectedUserOption = userOptions.find(
+            (opt) => opt.id === selectedOption
+        );
         if (!selectedUserOption?.idpId) return;
 
         setLoading(true);
@@ -374,7 +394,9 @@ export default function Page() {
     async function onSubmitGenericOidc(
         values: z.infer<typeof genericOidcFormSchema>
     ) {
-        const selectedUserOption = userOptions.find(opt => opt.id === selectedOption);
+        const selectedUserOption = userOptions.find(
+            (opt) => opt.id === selectedOption
+        );
         if (!selectedUserOption?.idpId) return;
 
         setLoading(true);
@@ -430,7 +452,7 @@ export default function Page() {
 
             <div>
                 <SettingsContainer>
-                    {!inviteLink && build !== "saas" && dataLoaded ? (
+                    {!inviteLink ? (
                         <SettingsSection>
                             <SettingsSectionHeader>
                                 <SettingsSectionTitle>
@@ -664,214 +686,284 @@ export default function Page() {
                         </>
                     )}
 
-                    {selectedOption && selectedOption !== "internal" && dataLoaded && (
-                                <SettingsSection>
-                                    <SettingsSectionHeader>
-                                        <SettingsSectionTitle>
-                                            {t("userSettings")}
-                                        </SettingsSectionTitle>
-                                        <SettingsSectionDescription>
-                                            {t("userSettingsDescription")}
-                                        </SettingsSectionDescription>
-                                    </SettingsSectionHeader>
-                                    <SettingsSectionBody>
-                                        <SettingsSectionForm>
-                                            {/* Google/Azure Form */}
-                                            {(() => {
-                                                const selectedUserOption = userOptions.find(opt => opt.id === selectedOption);
-                                                return selectedUserOption?.variant === "google" || selectedUserOption?.variant === "azure";
-                                            })() && (
-                                                <Form {...googleAzureForm}>
-                                                    <form
-                                                        onSubmit={googleAzureForm.handleSubmit(
-                                                            onSubmitGoogleAzure
+                    {selectedOption &&
+                        selectedOption !== "internal" &&
+                        dataLoaded && (
+                            <SettingsSection>
+                                <SettingsSectionHeader>
+                                    <SettingsSectionTitle>
+                                        {t("userSettings")}
+                                    </SettingsSectionTitle>
+                                    <SettingsSectionDescription>
+                                        {t("userSettingsDescription")}
+                                    </SettingsSectionDescription>
+                                </SettingsSectionHeader>
+                                <SettingsSectionBody>
+                                    <SettingsSectionForm>
+                                        {/* Google/Azure Form */}
+                                        {(() => {
+                                            const selectedUserOption =
+                                                userOptions.find(
+                                                    (opt) =>
+                                                        opt.id ===
+                                                        selectedOption
+                                                );
+                                            return (
+                                                selectedUserOption?.variant ===
+                                                    "google" ||
+                                                selectedUserOption?.variant ===
+                                                    "azure"
+                                            );
+                                        })() && (
+                                            <Form {...googleAzureForm}>
+                                                <form
+                                                    onSubmit={googleAzureForm.handleSubmit(
+                                                        onSubmitGoogleAzure
+                                                    )}
+                                                    className="space-y-4"
+                                                    id="create-user-form"
+                                                >
+                                                    <FormField
+                                                        control={
+                                                            googleAzureForm.control
+                                                        }
+                                                        name="email"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>
+                                                                    {t("email")}
+                                                                </FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        {...field}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
                                                         )}
-                                                        className="space-y-4"
-                                                        id="create-user-form"
-                                                    >
-                                                        <FormField
-                                                            control={googleAzureForm.control}
-                                                            name="email"
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>
-                                                                        {t("email")}
-                                                                    </FormLabel>
-                                                                    <FormControl>
-                                                                        <Input
-                                                                            {...field}
-                                                                        />
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
+                                                    />
 
-                                                        <FormField
-                                                            control={googleAzureForm.control}
-                                                            name="name"
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>
-                                                                        {t("nameOptional")}
-                                                                    </FormLabel>
-                                                                    <FormControl>
-                                                                        <Input
-                                                                            {...field}
-                                                                        />
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
+                                                    <FormField
+                                                        control={
+                                                            googleAzureForm.control
+                                                        }
+                                                        name="name"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>
+                                                                    {t(
+                                                                        "nameOptional"
+                                                                    )}
+                                                                </FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        {...field}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
 
-                                                        <FormField
-                                                            control={googleAzureForm.control}
-                                                            name="roleId"
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>
-                                                                        {t("role")}
-                                                                    </FormLabel>
-                                                                    <Select
-                                                                        onValueChange={field.onChange}
-                                                                    >
-                                                                        <FormControl>
-                                                                            <SelectTrigger className="w-full">
-                                                                                <SelectValue
-                                                                                    placeholder={t("accessRoleSelect")}
-                                                                                />
-                                                                            </SelectTrigger>
-                                                                        </FormControl>
-                                                                        <SelectContent>
-                                                                            {roles.map((role) => (
+                                                    <FormField
+                                                        control={
+                                                            googleAzureForm.control
+                                                        }
+                                                        name="roleId"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>
+                                                                    {t("role")}
+                                                                </FormLabel>
+                                                                <Select
+                                                                    onValueChange={
+                                                                        field.onChange
+                                                                    }
+                                                                >
+                                                                    <FormControl>
+                                                                        <SelectTrigger className="w-full">
+                                                                            <SelectValue
+                                                                                placeholder={t(
+                                                                                    "accessRoleSelect"
+                                                                                )}
+                                                                            />
+                                                                        </SelectTrigger>
+                                                                    </FormControl>
+                                                                    <SelectContent>
+                                                                        {roles.map(
+                                                                            (
+                                                                                role
+                                                                            ) => (
                                                                                 <SelectItem
-                                                                                    key={role.roleId}
+                                                                                    key={
+                                                                                        role.roleId
+                                                                                    }
                                                                                     value={role.roleId.toString()}
                                                                                 >
-                                                                                    {role.name}
+                                                                                    {
+                                                                                        role.name
+                                                                                    }
                                                                                 </SelectItem>
-                                                                            ))}
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
-                                                    </form>
-                                                </Form>
-                                            )}
-
-                                            {/* Generic OIDC Form */}
-                                            {(() => {
-                                                const selectedUserOption = userOptions.find(opt => opt.id === selectedOption);
-                                                return selectedUserOption?.variant !== "google" && selectedUserOption?.variant !== "azure";
-                                            })() && (
-                                                <Form {...genericOidcForm}>
-                                                    <form
-                                                        onSubmit={genericOidcForm.handleSubmit(
-                                                            onSubmitGenericOidc
+                                                                            )
+                                                                        )}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                                <FormMessage />
+                                                            </FormItem>
                                                         )}
-                                                        className="space-y-4"
-                                                        id="create-user-form"
-                                                    >
-                                                        <FormField
-                                                            control={genericOidcForm.control}
-                                                            name="username"
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>
-                                                                        {t("username")}
-                                                                    </FormLabel>
-                                                                    <FormControl>
-                                                                        <Input
-                                                                            {...field}
-                                                                        />
-                                                                    </FormControl>
-                                                                    <p className="text-sm text-muted-foreground mt-1">
-                                                                        {t("usernameUniq")}
-                                                                    </p>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
+                                                    />
+                                                </form>
+                                            </Form>
+                                        )}
 
-                                                        <FormField
-                                                            control={genericOidcForm.control}
-                                                            name="email"
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>
-                                                                        {t("emailOptional")}
-                                                                    </FormLabel>
-                                                                    <FormControl>
-                                                                        <Input
-                                                                            {...field}
-                                                                        />
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
+                                        {/* Generic OIDC Form */}
+                                        {(() => {
+                                            const selectedUserOption =
+                                                userOptions.find(
+                                                    (opt) =>
+                                                        opt.id ===
+                                                        selectedOption
+                                                );
+                                            return (
+                                                selectedUserOption?.variant !==
+                                                    "google" &&
+                                                selectedUserOption?.variant !==
+                                                    "azure"
+                                            );
+                                        })() && (
+                                            <Form {...genericOidcForm}>
+                                                <form
+                                                    onSubmit={genericOidcForm.handleSubmit(
+                                                        onSubmitGenericOidc
+                                                    )}
+                                                    className="space-y-4"
+                                                    id="create-user-form"
+                                                >
+                                                    <FormField
+                                                        control={
+                                                            genericOidcForm.control
+                                                        }
+                                                        name="username"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>
+                                                                    {t(
+                                                                        "username"
+                                                                    )}
+                                                                </FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        {...field}
+                                                                    />
+                                                                </FormControl>
+                                                                <p className="text-sm text-muted-foreground mt-1">
+                                                                    {t(
+                                                                        "usernameUniq"
+                                                                    )}
+                                                                </p>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
 
-                                                        <FormField
-                                                            control={genericOidcForm.control}
-                                                            name="name"
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>
-                                                                        {t("nameOptional")}
-                                                                    </FormLabel>
-                                                                    <FormControl>
-                                                                        <Input
-                                                                            {...field}
-                                                                        />
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
+                                                    <FormField
+                                                        control={
+                                                            genericOidcForm.control
+                                                        }
+                                                        name="email"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>
+                                                                    {t(
+                                                                        "emailOptional"
+                                                                    )}
+                                                                </FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        {...field}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
 
-                                                        <FormField
-                                                            control={genericOidcForm.control}
-                                                            name="roleId"
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>
-                                                                        {t("role")}
-                                                                    </FormLabel>
-                                                                    <Select
-                                                                        onValueChange={field.onChange}
-                                                                    >
-                                                                        <FormControl>
-                                                                            <SelectTrigger className="w-full">
-                                                                                <SelectValue
-                                                                                    placeholder={t("accessRoleSelect")}
-                                                                                />
-                                                                            </SelectTrigger>
-                                                                        </FormControl>
-                                                                        <SelectContent>
-                                                                            {roles.map((role) => (
+                                                    <FormField
+                                                        control={
+                                                            genericOidcForm.control
+                                                        }
+                                                        name="name"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>
+                                                                    {t(
+                                                                        "nameOptional"
+                                                                    )}
+                                                                </FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        {...field}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={
+                                                            genericOidcForm.control
+                                                        }
+                                                        name="roleId"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>
+                                                                    {t("role")}
+                                                                </FormLabel>
+                                                                <Select
+                                                                    onValueChange={
+                                                                        field.onChange
+                                                                    }
+                                                                >
+                                                                    <FormControl>
+                                                                        <SelectTrigger className="w-full">
+                                                                            <SelectValue
+                                                                                placeholder={t(
+                                                                                    "accessRoleSelect"
+                                                                                )}
+                                                                            />
+                                                                        </SelectTrigger>
+                                                                    </FormControl>
+                                                                    <SelectContent>
+                                                                        {roles.map(
+                                                                            (
+                                                                                role
+                                                                            ) => (
                                                                                 <SelectItem
-                                                                                    key={role.roleId}
+                                                                                    key={
+                                                                                        role.roleId
+                                                                                    }
                                                                                     value={role.roleId.toString()}
                                                                                 >
-                                                                                    {role.name}
+                                                                                    {
+                                                                                        role.name
+                                                                                    }
                                                                                 </SelectItem>
-                                                                            ))}
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
-                                                    </form>
-                                                </Form>
-                                            )}
-                                        </SettingsSectionForm>
-                                    </SettingsSectionBody>
-                                </SettingsSection>
-                    )}
+                                                                            )
+                                                                        )}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </form>
+                                            </Form>
+                                        )}
+                                    </SettingsSectionForm>
+                                </SettingsSectionBody>
+                            </SettingsSection>
+                        )}
                 </SettingsContainer>
 
                 <div className="flex justify-end space-x-2 mt-8">

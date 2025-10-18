@@ -1,14 +1,16 @@
 import { internal } from "@app/lib/api";
 import { authCookieHeader } from "@app/lib/api/cookies";
-import ProfileIcon from "@app/components/ProfileIcon";
 import { verifySession } from "@app/lib/auth/verifySession";
-import UserProvider from "@app/providers/UserProvider";
 import { GetOrgResponse } from "@server/routers/org";
 import { GetOrgUserResponse } from "@server/routers/user";
 import { AxiosResponse } from "axios";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import SetLastOrgCookie from "@app/components/SetLastOrgCookie";
+import SubscriptionStatusProvider from "@app/providers/SubscriptionStatusProvider";
+import { GetOrgSubscriptionResponse } from "@server/routers/billing/types";
+import { pullEnv } from "@app/lib/pullEnv";
+import { build } from "@server/build";
 
 export default async function OrgLayout(props: {
     children: React.ReactNode;
@@ -17,6 +19,7 @@ export default async function OrgLayout(props: {
     const cookie = await authCookieHeader();
     const params = await props.params;
     const orgId = params.orgId;
+    const env = pullEnv();
 
     if (!orgId) {
         redirect(`/`);
@@ -50,10 +53,31 @@ export default async function OrgLayout(props: {
         redirect(`/`);
     }
 
+    let subscriptionStatus = null;
+    if (build === "saas") {
+        try {
+            const getSubscription = cache(() =>
+                internal.get<AxiosResponse<GetOrgSubscriptionResponse>>(
+                    `/org/${orgId}/billing/subscription`,
+                    cookie
+                )
+            );
+            const subRes = await getSubscription();
+            subscriptionStatus = subRes.data.data;
+        } catch (error) {
+            // If subscription fetch fails, keep subscriptionStatus as null
+            console.error("Failed to fetch subscription status:", error);
+        }
+    }
+
     return (
-        <>
+        <SubscriptionStatusProvider
+            subscriptionStatus={subscriptionStatus}
+            env={env.app.environment}
+            sandbox_mode={env.app.sandbox_mode}
+        >
             {props.children}
             <SetLastOrgCookie orgId={orgId} />
-        </>
+        </SubscriptionStatusProvider>
     );
 }

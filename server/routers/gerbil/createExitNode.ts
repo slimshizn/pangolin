@@ -30,6 +30,7 @@ export async function createExitNode(publicKey: string, reachableAt: string | un
                 publicKey,
                 endpoint: `${subEndpoint}${subEndpoint != "" ? "." : ""}${config.getRawConfig().gerbil.base_endpoint}`,
                 address,
+                online: true,
                 listenPort,
                 reachableAt,
                 name: exitNodeName
@@ -51,7 +52,7 @@ export async function createExitNode(publicKey: string, reachableAt: string | un
             .where(eq(exitNodes.publicKey, publicKey))
             .returning();
 
-        logger.info(`Updated exit node`);
+        logger.info(`Updated exit node with reachableAt to ${reachableAt}`);
     }
 
     return exitNode;

@@ -8,11 +8,15 @@ import { useTranslations } from "next-intl";
 interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
     data: TData[];
+    onRefresh?: () => void;
+    isRefreshing?: boolean;
 }
 
 export function IdpDataTable<TData, TValue>({
     columns,
-    data
+    data,
+    onRefresh,
+    isRefreshing
 }: DataTableProps<TData, TValue>) {
     const router = useRouter();
     const t = useTranslations();
@@ -29,6 +33,8 @@ export function IdpDataTable<TData, TValue>({
             onAdd={() => {
                 router.push("/admin/idp/create");
             }}
+            onRefresh={onRefresh}
+            isRefreshing={isRefreshing}
         />
     );
 }

@@ -69,9 +69,16 @@ export async function applyBlueprint(
                         `Updating target ${target.targetId} on site ${site.sites.siteId}`
                     );
 
+                    // see if you can find a matching target health check from the healthchecksToUpdate array
+                    const matchingHealthcheck =
+                        result.healthchecksToUpdate.find(
+                            (hc) => hc.targetId === target.targetId
+                        );
+
                     await addProxyTargets(
                         site.newt.newtId,
                         [target],
+                        matchingHealthcheck ? [matchingHealthcheck] : [],
                         result.proxyResource.protocol,
                         result.proxyResource.proxyPort
                     );

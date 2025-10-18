@@ -9,7 +9,7 @@ import createHttpError from "http-errors";
 import logger from "@server/logger";
 import { deletePeer } from "../gerbil/peers";
 import { fromError } from "zod-validation-error";
-import { sendToClient } from "../ws";
+import { sendToClient } from "#dynamic/routers/ws";
 import { OpenAPITags, registry } from "@server/openApi";
 
 const deleteSiteSchema = z

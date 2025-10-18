@@ -14,7 +14,9 @@ import {
     User,
     Globe, // Added from 'dev' branch
     MonitorUp, // Added from 'dev' branch
-    Zap
+    Server,
+    Zap,
+    CreditCard
 } from "lucide-react";
 
 export type SidebarNavSection = {
@@ -53,7 +55,18 @@ export const orgNavSections = (
                       {
                           title: "sidebarClients",
                           href: "/{orgId}/settings/clients",
-                          icon: <MonitorUp className="h-4 w-4" />
+                          icon: <MonitorUp className="h-4 w-4" />,
+                          isBeta: true
+                      }
+                  ]
+                : []),
+            ...(build == "saas"
+                ? [
+                      {
+                          title: "sidebarRemoteExitNodes",
+                          href: "/{orgId}/settings/remote-exit-nodes",
+                          icon: <Server className="h-4 w-4" />,
+                          showEE: true
                       }
                   ]
                 : []),
@@ -82,6 +95,16 @@ export const orgNavSections = (
                 href: "/{orgId}/settings/access/invitations",
                 icon: <TicketCheck className="h-4 w-4" />
             },
+            ...(build == "saas"
+                ? [
+                      {
+                          title: "sidebarIdentityProviders",
+                          href: "/{orgId}/settings/idp",
+                          icon: <Fingerprint className="h-4 w-4" />,
+                          showEE: true
+                      }
+                  ]
+                : []),
             {
                 title: "sidebarShareableLinks",
                 href: "/{orgId}/settings/share-links",
@@ -97,6 +120,24 @@ export const orgNavSections = (
                 href: "/{orgId}/settings/api-keys",
                 icon: <KeyRound className="h-4 w-4" />
             },
+            ...(build == "saas"
+                ? [
+                      {
+                          title: "sidebarBilling",
+                          href: "/{orgId}/settings/billing",
+                          icon: <CreditCard className="h-4 w-4" />
+                      }
+                  ]
+                : []),
+            ...(build == "saas"
+                ? [
+                      {
+                          title: "sidebarEnterpriseLicenses",
+                          href: "/{orgId}/settings/license",
+                          icon: <TicketCheck className="h-4 w-4" />
+                      }
+                  ]
+                : []),
             {
                 title: "sidebarSettings",
                 href: "/{orgId}/settings/general",
@@ -110,15 +151,6 @@ export const adminNavSections: SidebarNavSection[] = [
     {
         heading: "Admin",
         items: [
-            ...(build == "oss"
-                ? [
-                      {
-                          title: "managedSelfhosted",
-                          href: "/admin/managed",
-                          icon: <Zap className="h-4 w-4" />
-                      }
-                  ]
-                : []),
             {
                 title: "sidebarAllUsers",
                 href: "/admin/users",

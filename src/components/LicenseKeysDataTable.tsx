@@ -6,9 +6,9 @@ import { Button } from "@app/components/ui/button";
 import { Badge } from "@app/components/ui/badge";
 import { LicenseKeyCache } from "@server/license/license";
 import { ArrowUpDown } from "lucide-react";
-import moment from "moment";
 import CopyToClipboard from "@app/components/CopyToClipboard";
 import { useTranslations } from "next-intl";
+import moment from "moment";
 
 type LicenseKeysDataTableProps = {
     licenseKeys: LicenseKeyCache[];
@@ -28,7 +28,6 @@ export function LicenseKeysDataTable({
     onDelete,
     onCreate
 }: LicenseKeysDataTableProps) {
-
     const t = useTranslations();
 
     const columns: ColumnDef<LicenseKeyCache>[] = [
@@ -42,7 +41,7 @@ export function LicenseKeysDataTable({
                             column.toggleSorting(column.getIsSorted() === "asc")
                         }
                     >
-                        {t('licenseKey')}
+                        {t("licenseKey")}
                         <ArrowUpDown className="ml-2 h-4 w-4" />
                     </Button>
                 );
@@ -67,42 +66,21 @@ export function LicenseKeysDataTable({
                             column.toggleSorting(column.getIsSorted() === "asc")
                         }
                     >
-                        {t('valid')}
+                        {t("valid")}
                         <ArrowUpDown className="ml-2 h-4 w-4" />
                     </Button>
                 );
             },
             cell: ({ row }) => {
-                return row.original.valid ? t('yes') : t('no');
-            }
-        },
-        {
-            accessorKey: "type",
-            header: ({ column }) => {
-                return (
-                    <Button
-                        variant="ghost"
-                        onClick={() =>
-                            column.toggleSorting(column.getIsSorted() === "asc")
-                        }
-                    >
-                        {t('type')}
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                );
-            },
-            cell: ({ row }) => {
-                const type = row.original.type;
-                const label =
-                    type === "SITES" ? t('sitesAdditional') : t('licenseHost');
-                const variant = type === "SITES" ? "secondary" : "default";
                 return row.original.valid ? (
-                    <Badge variant={variant}>{label}</Badge>
-                ) : null;
+                    <Badge variant="green">{t("yes")}</Badge>
+                ) : (
+                    <Badge variant="red">{t("no")}</Badge>
+                );
             }
         },
         {
-            accessorKey: "numSites",
+            accessorKey: "tier",
             header: ({ column }) => {
                 return (
                     <Button
@@ -111,10 +89,36 @@ export function LicenseKeysDataTable({
                             column.toggleSorting(column.getIsSorted() === "asc")
                         }
                     >
-                        {t('numberOfSites')}
+                        {t("type")}
                         <ArrowUpDown className="ml-2 h-4 w-4" />
                     </Button>
                 );
+            },
+            cell: ({ row }) => {
+                const tier = row.original.tier;
+                return tier === "enterprise"
+                    ? t("licenseTierEnterprise")
+                    : t("licenseTierPersonal");
+            }
+        },
+        {
+            accessorKey: "terminateAt",
+            header: ({ column }) => {
+                return (
+                    <Button
+                        variant="ghost"
+                        onClick={() =>
+                            column.toggleSorting(column.getIsSorted() === "asc")
+                        }
+                    >
+                        {t("licenseTableValidUntil")}
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                );
+            },
+            cell: ({ row }) => {
+                const termianteAt = row.original.terminateAt;
+                return moment(termianteAt).format("lll");
             }
         },
         {
@@ -125,7 +129,7 @@ export function LicenseKeysDataTable({
                         variant="secondary"
                         onClick={() => onDelete(row.original)}
                     >
-                        {t('delete')}
+                        {t("delete")}
                     </Button>
                 </div>
             )
@@ -137,11 +141,11 @@ export function LicenseKeysDataTable({
             columns={columns}
             data={licenseKeys}
             persistPageSize="licenseKeys-table"
-            title={t('licenseKeys')}
-            searchPlaceholder={t('licenseKeySearch')}
+            title={t("licenseKeys")}
+            searchPlaceholder={t("licenseKeySearch")}
             searchColumn="licenseKey"
             onAdd={onCreate}
-            addButtonText={t('licenseKeyAdd')}
+            addButtonText={t("licenseKeyAdd")}
         />
     );
 }

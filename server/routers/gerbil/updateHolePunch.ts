@@ -18,8 +18,7 @@ import logger from "@server/logger";
 import { fromError } from "zod-validation-error";
 import { validateNewtSessionToken } from "@server/auth/sessions/newt";
 import { validateOlmSessionToken } from "@server/auth/sessions/olm";
-import axios from "axios";
-import { checkExitNodeOrg } from "@server/lib/exitNodes";
+import { checkExitNodeOrg } from "#dynamic/lib/exitNodes";
 
 // Define Zod schema for request validation
 const updateHolePunchSchema = z.object({
@@ -105,7 +104,7 @@ export async function updateHolePunch(
             destinations: destinations
         });
     } catch (error) {
-        logger.error(error);
+        // logger.error(error); // FIX THIS
         return next(
             createHttpError(
                 HttpCode.INTERNAL_SERVER_ERROR,
@@ -122,7 +121,8 @@ export async function updateAndGenerateEndpointDestinations(
     port: number,
     timestamp: number,
     token: string,
-    exitNode: ExitNode
+    exitNode: ExitNode,
+    checkOrg = false
 ) {
     let currentSiteId: number | undefined;
     const destinations: PeerDestination[] = [];
@@ -158,7 +158,7 @@ export async function updateAndGenerateEndpointDestinations(
             .where(eq(clients.clientId, olm.clientId))
             .returning();
 
-        if (await checkExitNodeOrg(exitNode.exitNodeId, client.orgId)) {
+        if (await checkExitNodeOrg(exitNode.exitNodeId, client.orgId) && checkOrg) {
             // not allowed
             logger.warn(
                 `Exit node ${exitNode.exitNodeId} is not allowed for org ${client.orgId}`
@@ -253,7 +253,7 @@ export async function updateAndGenerateEndpointDestinations(
             .where(eq(sites.siteId, newt.siteId))
             .limit(1);
 
-        if (await checkExitNodeOrg(exitNode.exitNodeId, site.orgId)) {
+        if (await checkExitNodeOrg(exitNode.exitNodeId, site.orgId) && checkOrg) {
             // not allowed
             logger.warn(
                 `Exit node ${exitNode.exitNodeId} is not allowed for org ${site.orgId}`

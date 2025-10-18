@@ -119,12 +119,13 @@ export default function CreateDomainForm({
     const t = useTranslations();
     const { toast } = useToast();
     const { org } = useOrgContext();
+    const { env } = useEnvContext();
 
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
             baseDomain: "",
-            type: build == "oss" ? "wildcard" : "ns"
+            type: build == "oss" || !env.flags.usePangolinDns ? "wildcard" : "ns"
         }
     });
 
@@ -169,7 +170,7 @@ export default function CreateDomainForm({
     }, [domainInputValue]);
 
     let domainOptions: any = [];
-    if (build == "enterprise" || build == "saas") {
+    if (build != "oss" && env.flags.usePangolinDns) {
         domainOptions = [
             {
                 id: "ns",
@@ -182,7 +183,7 @@ export default function CreateDomainForm({
                 description: t("selectDomainTypeCnameDescription")
             }
         ];
-    } else if (build == "oss") {
+    } else {
         domainOptions = [
             {
                 id: "wildcard",
@@ -559,8 +560,7 @@ export default function CreateDomainForm({
                                     )}
                             </div>
 
-                            {build == "saas" ||
-                                (build == "enterprise" && (
+                            {build != "oss" && env.flags.usePangolinDns && (
                                     <Alert variant="destructive">
                                         <AlertTriangle className="h-4 w-4" />
                                         <AlertTitle className="font-semibold">
@@ -572,7 +572,7 @@ export default function CreateDomainForm({
                                             )}
                                         </AlertDescription>
                                     </Alert>
-                                ))}
+                                )}
 
                             <Alert variant="info">
                                 <AlertTriangle className="h-4 w-4" />

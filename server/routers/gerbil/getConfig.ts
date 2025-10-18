@@ -1,19 +1,15 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { sites, resources, targets, exitNodes, ExitNode } from "@server/db";
+import { sites, exitNodes, ExitNode } from "@server/db";
 import { db } from "@server/db";
 import { eq, isNotNull, and } from "drizzle-orm";
 import HttpCode from "@server/types/HttpCode";
 import createHttpError from "http-errors";
 import logger from "@server/logger";
 import config from "@server/lib/config";
-import { getUniqueExitNodeEndpointName } from "../../db/names";
-import { findNextAvailableCidr } from "@server/lib/ip";
 import { fromError } from "zod-validation-error";
 import { getAllowedIps } from "../target/helpers";
-import { proxyToRemote } from "@server/lib/remoteProxy";
-import { getNextAvailableSubnet } from "@server/lib/exitNodes";
-import { createExitNode } from "./createExitNode";
+import { createExitNode } from "#dynamic/routers/gerbil/createExitNode";
 
 // Define Zod schema for request validation
 const getConfigSchema = z.object({
@@ -64,16 +60,6 @@ export async function getConfig(
                     "Failed to create exit node"
                 )
             );
-        }
-
-        // STOP HERE IN HYBRID MODE
-        if (config.isManagedMode()) {
-            req.body = {
-                ...req.body,
-                endpoint: exitNode.endpoint,
-                listenPort: exitNode.listenPort
-            };
-            return proxyToRemote(req, res, next, "hybrid/gerbil/get-config");
         }
 
         const configResponse = await generateGerbilConfig(exitNode);
@@ -131,27 +117,4 @@ export async function generateGerbilConfig(exitNode: ExitNode) {
     };
 
     return configResponse;
-}
-
-async function getNextAvailablePort(): Promise<number> {
-    // Get all existing ports from exitNodes table
-    const existingPorts = await db
-        .select({
-            listenPort: exitNodes.listenPort
-        })
-        .from(exitNodes);
-
-    // Find the first available port between 1024 and 65535
-    let nextPort = config.getRawConfig().gerbil.start_port;
-    for (const port of existingPorts) {
-        if (port.listenPort > nextPort) {
-            break;
-        }
-        nextPort++;
-        if (nextPort > 65535) {
-            throw new Error("No available ports remaining in space");
-        }
-    }
-
-    return nextPort;
 }

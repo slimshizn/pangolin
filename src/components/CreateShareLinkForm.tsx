@@ -388,6 +388,7 @@ export default function CreateShareLinkForm({
                                                                         field.onChange
                                                                     }
                                                                     defaultValue={field.value.toString()}
+                                                                    disabled={neverExpire}
                                                                 >
                                                                     <FormControl>
                                                                         <SelectTrigger className="w-full">
@@ -423,6 +424,7 @@ export default function CreateShareLinkForm({
                                                     <FormField
                                                         control={form.control}
                                                         name="timeValue"
+                                                        disabled={neverExpire}
                                                         render={({ field }) => (
                                                             <FormItem>
                                                                 <FormControl>
@@ -474,7 +476,9 @@ export default function CreateShareLinkForm({
                                     </p>
 
                                     <div className="h-[250px] w-full mx-auto flex items-center justify-center">
+                                        <div className="bg-white p-6 border rounded-md">
                                         <QRCodeCanvas value={link} size={200} />
+                                        </div>
                                     </div>
 
                                     <Collapsible

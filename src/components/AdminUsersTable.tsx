@@ -46,6 +46,25 @@ export default function UsersTable({ users }: Props) {
 
     const api = createApiClient(useEnvContext());
 
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const refreshData = async () => {
+        console.log("Data refreshed");
+        setIsRefreshing(true);
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            router.refresh();
+        } catch (error) {
+            toast({
+                title: t("error"),
+                description: t("refreshError"),
+                variant: "destructive"
+            });
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
     const deleteUser = (id: string) => {
         api.delete(`/user/${id}`)
             .catch((e) => {
@@ -168,7 +187,7 @@ export default function UsersTable({ users }: Props) {
                     <div className="flex flex-row items-center gap-2">
                         <span>
                             {userRow.twoFactorEnabled ||
-                            userRow.twoFactorSetupRequested ? (
+                                userRow.twoFactorSetupRequested ? (
                                 <span className="text-green-500">
                                     {t("enabled")}
                                 </span>
@@ -263,7 +282,12 @@ export default function UsersTable({ users }: Props) {
                 />
             )}
 
-            <UsersDataTable columns={columns} data={rows} />
+            <UsersDataTable
+                columns={columns}
+                data={rows}
+                onRefresh={refreshData}
+                isRefreshing={isRefreshing}
+            />
         </>
     );
 }

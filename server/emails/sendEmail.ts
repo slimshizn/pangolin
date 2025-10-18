@@ -2,7 +2,6 @@ import { render } from "@react-email/render";
 import { ReactElement } from "react";
 import emailClient from "@server/emails";
 import logger from "@server/logger";
-import config from "@server/lib/config";
 
 export async function sendEmail(
     template: ReactElement,
@@ -11,7 +10,7 @@ export async function sendEmail(
         from: string | undefined;
         to: string | undefined;
         subject: string;
-    },
+    }
 ) {
     if (!emailClient) {
         logger.warn("Email client not configured, skipping email send");
@@ -25,16 +24,16 @@ export async function sendEmail(
 
     const emailHtml = await render(template);
 
-    const appName = "Pangolin";
+    const appName = process.env.BRANDING_APP_NAME || "Pangolin"; // From the private config loading into env vars to seperate away the private config
 
     await emailClient.sendMail({
         from: {
             name: opts.name || appName,
-            address: opts.from,
+            address: opts.from
         },
         to: opts.to,
         subject: opts.subject,
-        html: emailHtml,
+        html: emailHtml
     });
 }
 

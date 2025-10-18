@@ -16,6 +16,7 @@ import Image from "next/image";
 import { cleanRedirect } from "@app/lib/cleanRedirect";
 import BrandingLogo from "@app/components/BrandingLogo";
 import { useTranslations } from "next-intl";
+import { useLicenseStatusContext } from "@app/hooks/useLicenseStatusContext";
 
 type DashboardLoginFormProps = {
     redirect?: string;
@@ -29,16 +30,23 @@ export default function DashboardLoginForm({
     const router = useRouter();
     const { env } = useEnvContext();
     const t = useTranslations();
+    const { isUnlocked } = useLicenseStatusContext();
 
     function getSubtitle() {
         return t("loginStart");
     }
 
+    const logoWidth = isUnlocked() ? env.branding.logo?.authPage?.width || 175 : 175;
+    const logoHeight = isUnlocked() ? env.branding.logo?.authPage?.height || 58 : 58;
+
     return (
         <Card className="shadow-md w-full max-w-md">
             <CardHeader className="border-b">
                 <div className="flex flex-row items-center justify-center">
-                    <BrandingLogo height={58} width={175} />
+                    <BrandingLogo
+                        height={logoHeight}
+                        width={logoWidth}
+                    />
                 </div>
                 <div className="text-center space-y-1 pt-3">
                     <p className="text-muted-foreground">{getSubtitle()}</p>

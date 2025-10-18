@@ -1,46 +1,36 @@
 <div align="center">
     <h2>
-      <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="public/logo/word_mark_white.png">
-          <img alt="Pangolin Logo" src="public/logo/word_mark_black.png" width="250">
+    <a href="https://pangolin.net/">
+        <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="public/logo/word_mark_white.png">
+            <img alt="Pangolin Logo" src="public/logo/word_mark_black.png" width="350">
         </picture>
+    </a>
     </h2>
-</div>
-
-<h4 align="center">Secure gateway to your private networks</h4>
-<div align="center">
-
-_Pangolin tunnels your services to the internet so you can access anything from anywhere._
-
 </div>
 
 <div align="center">
   <h5>
-      <a href="https://digpangolin.com">
+      <a href="https://pangolin.net/">
         Website
       </a>
       <span> | </span>
-      <a href="https://docs.digpangolin.com/self-host/quick-install-managed">
-        Quick Install Guide
+      <a href="https://docs.pangolin.net/">
+        Documentation
       </a>
       <span> | </span>
       <a href="mailto:contact@fossorial.io">
         Contact Us
       </a>
-      <span> | </span>
-      <a href="https://digpangolin.com/slack">
-        Slack
-      </a>
-      <span> | </span>
-      <a href="https://discord.gg/HCJR8Xhme4">
-        Discord
-      </a>
   </h5>
+</div>
 
-[![Slack](https://img.shields.io/badge/chat-slack-yellow?style=flat-square&logo=slack)](https://digpangolin.com/slack)
+<div align="center">
+
+[![Discord](https://img.shields.io/discord/1325658630518865980?logo=discord&style=flat-square)](https://discord.gg/HCJR8Xhme4)
+[![Slack](https://img.shields.io/badge/chat-slack-yellow?style=flat-square&logo=slack)](https://pangolin.net/slack)
 [![Docker](https://img.shields.io/docker/pulls/fosrl/pangolin?style=flat-square)](https://hub.docker.com/r/fosrl/pangolin)
 ![Stars](https://img.shields.io/github/stars/fosrl/pangolin?style=flat-square)
-[![Discord](https://img.shields.io/discord/1325658630518865980?logo=discord&style=flat-square)](https://discord.gg/HCJR8Xhme4)
 [![YouTube](https://img.shields.io/badge/YouTube-red?logo=youtube&logoColor=white&style=flat-square)](https://www.youtube.com/@fossorial-app)
 
 </div>
@@ -51,107 +41,48 @@ _Pangolin tunnels your services to the internet so you can access anything from 
     </strong>
 </p>
 
-Pangolin is a self-hosted tunneled reverse proxy server with identity and access control, designed to securely expose private resources on distributed networks. Acting as a central hub, it connects isolated networks — even those behind restrictive firewalls — through encrypted tunnels, enabling easy access to remote services without opening ports.
+Pangolin is a self-hosted tunneled reverse proxy server with identity and context aware access control, designed to easily expose and protect applications running anywhere. Pangolin acts as a central hub and connects isolated networks — even those behind restrictive firewalls — through encrypted tunnels, enabling easy access to remote services without opening ports or requiring a VPN.
 
-<img src="public/screenshots/hero.png" alt="Preview"/>
+## Installation
 
-![gif](public/clip.gif)
-
-## Key Features
-
-### Reverse Proxy Through WireGuard Tunnel
-
-- Expose private resources on your network **without opening ports** (firewall punching).
-- Secure and easy to configure private connectivity via a custom **user space WireGuard client**, [Newt](https://github.com/fosrl/newt).
-- Built-in support for any WireGuard client.
-- Automated **SSL certificates** (https) via [LetsEncrypt](https://letsencrypt.org/).
-- Support for HTTP/HTTPS and **raw TCP/UDP services**.
-- Load balancing.
-- Extend functionality with existing [Traefik](https://github.com/traefik/traefik) plugins, such as [CrowdSec](https://plugins.traefik.io/plugins/6335346ca4caa9ddeffda116/crowdsec-bouncer-traefik-plugin) and [Geoblock](https://github.com/PascalMinder/geoblock).
-    - **Automatically install and configure Crowdsec via Pangolin's installer script.**
-- Attach as many sites to the central server as you wish.
-
-### Identity & Access Management
-
-- Centralized authentication system using platform SSO. **Users will only have to manage one login.**
-- **Define access control rules for IPs, IP ranges, and URL paths per resource.**
-- TOTP with backup codes for two-factor authentication.
-- Create organizations, each with multiple sites, users, and roles.
-- **Role-based access control** to manage resource access permissions.
-- Additional authentication options include:
-    - Email whitelisting with **one-time passcodes.**
-    - **Temporary, self-destructing share links.**
-    - Resource specific pin codes.
-    - Resource specific passwords.
-    - Passkeys
-- External identity provider (IdP) support with OAuth2/OIDC, such as Authentik, Keycloak, Okta, and others.
-    - Auto-provision users and roles from your IdP.
-
-<img src="public/auth-diagram1.png" alt="Auth and diagram"/>
-
-## Use Cases
-
-### Manage Access to Internal Apps
-
-- Grant users access to your apps from anywhere using just a web browser. No client software required.
-
-### Developers and DevOps
-
-- Expose and test internal tools and dashboards like **Grafana**. Bring localhost or private IPs online for easy access.
-
-### Secure API Gateway
-
-- One application load balancer across multiple clouds and on-premises.
-
-### IoT and Edge Devices
-
-- Easily expose **IoT devices**, **edge servers**, or **Raspberry Pi** to the internet for field equipment monitoring.
-
-<img src="public/screenshots/sites.png" alt="Sites"/>
+Check out the [quick install guide](https://docs.pangolin.net/self-host/quick-install) for how to install and set up Pangolin.
 
 ## Deployment Options
 
-### Fully Self Hosted
+| <img width=500 /> | Description |
+|-----------------|--------------|
+| **Self-Host: Community Edition** | Free, open source, and licensed under AGPL-3. |
+| **Self-Host: Enterprise Edition** | Licensed under Fossorial Commercial License. Free for personal and hobbyist use, and for businesses earning under \$100K USD annually. |
+| **Pangolin Cloud** | Fully managed service with instant setup and pay-as-you-go pricing — no infrastructure required. Or, self-host your own [remote node](https://docs.pangolin.net/manage/remote-node/nodes) and connect to our control plane. |
 
-Host the full application on your own server or on the cloud with a VPS. Take a look at the [documentation](https://docs.digpangolin.com/self-host/quick-install) to get started.
+## Key Features
 
-> Many of our users have had a great experience with [RackNerd](https://my.racknerd.com/aff.php?aff=13788). Depending on promotions, you can get a [**VPS with 1 vCPU, 1GB RAM, and ~20GB SSD for just around $12/year**](https://my.racknerd.com/aff.php?aff=13788&pid=912). That's a great deal!
+Pangolin packages everything you need for seamless application access and exposure into one cohesive platform.
 
-### Pangolin Cloud
+| <img width=500 />                                                                                                                                                                                                                                                                                                                                                                | <img width=500 />                                                  |
+|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------|
+| **Manage applications in one place**<br /><br /> Pangolin provides a unified dashboard where you can monitor, configure, and secure all of your services regardless of where they are hosted.                                                                                                                                                                                    | <img src="public/screenshots/hero.png" width=500 /><tr></tr> |
+| **Reverse proxy across networks anywhere**<br /><br />Route traffic via tunnels to any private network. Pangolin works like a reverse proxy that spans multiple networks and handles routing, load balancing, health checking, and more to the right services on the other end.                                                                                                  | <img src="public/screenshots/sites.png" width=500 /><tr></tr>          |
+| **Enforce identity and context aware rules**<br /><br />Protect your applications with identity and context aware rules such as SSO, OIDC, PIN, password, temporary share links, geolocation, IP, and more.                                                                                                                                                                                                | <img src="public/auth-diagram1.png" width=500 /><tr></tr>               |
+| **Quickly connect Pangolin sites**<br /><br />Pangolin's lightweight [Newt](https://github.com/fosrl/newt) client runs in userspace and can run anywhere. Use it as a site connector to route traffic to backends across all of your environments.                                                                                                                                                                                   | <img src="public/clip.gif" width=500 /><tr></tr>               |
 
-Easy to use with simple [pay as you go pricing](https://digpangolin.com/pricing). [Check it out here](https://pangolin.fossorial.io/auth/signup). 
+## Get Started
 
-- Everything you get with self hosted Pangolin, but fully managed for you.
+### Check out the docs
 
-### Managed & High Availability
+We encourage everyone to read the full documentation first, which is
+available at [docs.pangolin.net](https://docs.pangolin.net). This README provides only a very brief subset of
+the docs to illustrate some basic ideas.
 
-Managed control plane, your infrastructure
+### Sign up and try now
 
-- We manage database and control plane.
-- You self-host lightweight exit-node.
-- Traffic flows through your infra.
-- We coordinate failover between your nodes or to Cloud when things go bad.
-
-Try it out using [Pangolin Cloud](https://pangolin.fossorial.io)
-
-### Full Enterprise On-Premises
-
-[Contact us](mailto:numbat@fossorial.io) for a full distributed and enterprise deployments on your infrastructure controlled by your team.
-
-## Project Development / Roadmap
-
-We want to hear your feature requests! Add them to the [discussion board](https://github.com/orgs/fosrl/discussions/categories/feature-requests).
+For Pangolin's managed service, you will first need to create an account at
+[pangolin.fossorial.io](https://pangolin.fossorial.io). We have a generous free tier to get started.
 
 ## Licensing
 
-Pangolin is dual licensed under the AGPL-3 and the Fossorial Commercial license. For inquiries about commercial licensing, please contact us at [numbat@fossorial.io](mailto:numbat@fossorial.io).
+Pangolin is dual licensed under the AGPL-3 and the [Fossorial Commercial License](https://pangolin.net/fcl.html). For inquiries about commercial licensing, please contact us at [contact@fossorial.io](mailto:contact@fossorial.io).
 
 ## Contributions
 
-Looking for something to contribute? Take a look at issues marked with [help wanted](https://github.com/fosrl/pangolin/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22help%20wanted%22). Also take a look through the freature requests in Discussions - any are available and some are marked as a good first issue.
-
 Please see [CONTRIBUTING](./CONTRIBUTING.md) in the repository for guidelines and best practices.
-
-Please post bug reports and other functional issues in the [Issues](https://github.com/fosrl/pangolin/issues) section of the repository.
-
-If you are looking to help with translations, please contribute [on Crowdin](https://crowdin.com/project/fossorial-pangolin) or open a PR with changes to the translations files found in `messages/`.
